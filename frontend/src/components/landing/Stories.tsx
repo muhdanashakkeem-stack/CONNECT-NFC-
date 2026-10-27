@@ -29,7 +29,7 @@ const STORIES = [
     tag: 'Fleet Rollout',
     title: 'Venture Fleet Palette',
     desc: 'Harmonized enterprise color codification for regional partners.',
-    handle: '@speednfc',
+    handle: '@connectnfc',
   },
 ];
 
@@ -42,7 +42,10 @@ export const Stories: React.FC = () => {
             <span className="font-label-md text-label-md uppercase tracking-[0.24em] text-[#78716c] font-semibold mb-2 block">
               Visual Heritage
             </span>
-            <h2 className="font-display-lg text-display-lg text-[#1c1b1b] leading-tight">
+            <h2
+              className="text-display-lg text-[#1c1b1b] leading-tight"
+              style={{ fontFamily: "'Rockwell', 'Zilla Slab', 'Arvo', serif", fontWeight: 700 }}
+            >
               Latest from Editorial Stories
             </h2>
           </div>
@@ -51,29 +54,29 @@ export const Stories: React.FC = () => {
           </p>
         </div>
 
-        {/* 4-Card Gallery Mosaic */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-space-md">
-          {STORIES.map((story) => (
+          {STORIES.map((s, idx) => (
             <div
-              key={story.title}
-              className="group relative rounded-xl overflow-hidden bg-white shadow-sm flex flex-col border border-stone-200/60"
+              key={idx}
+              className="rounded-xl overflow-hidden bg-white shadow-sm flex flex-col group hover:shadow-xl transition-all duration-300"
             >
-              <div
-                className="h-64 w-full bg-cover bg-center overflow-hidden transition-transform duration-500 group-hover:scale-105"
-                style={{ backgroundImage: `url("${story.image}")` }}
-              >
-                <div className="w-full h-full bg-black/10 group-hover:bg-transparent transition-all"></div>
+              <div className="aspect-[4/5] w-full overflow-hidden relative">
+                <img
+                  src={s.image}
+                  alt={s.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                />
+                <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-white font-label-sm text-label-sm tracking-widest uppercase">
+                  {s.tag}
+                </div>
               </div>
-              <div className="p-4 flex flex-col justify-between flex-grow">
+              <div className="p-space-md flex flex-col flex-1 justify-between">
                 <div>
-                  <div className="flex items-center gap-1.5 text-secondary-container font-label-sm text-label-sm uppercase tracking-wider">
-                    <span className="material-symbols-outlined text-[13px]">verified</span> {story.tag}
-                  </div>
-                  <h4 className="font-title-md text-title-md text-[#1c1b1b] font-semibold mt-1">{story.title}</h4>
-                  <p className="font-body-sm text-body-sm text-[#78716c] mt-0.5">{story.desc}</p>
+                  <h3 className="font-title-lg text-title-lg text-[#1c1b1b] font-bold">{s.title}</h3>
+                  <p className="font-body-sm text-body-sm text-[#78716c] mt-1 leading-relaxed">{s.desc}</p>
                 </div>
                 <span className="font-label-sm text-label-sm text-stone-400 uppercase tracking-widest mt-3">
-                  {story.handle}
+                  {s.handle}
                 </span>
               </div>
             </div>

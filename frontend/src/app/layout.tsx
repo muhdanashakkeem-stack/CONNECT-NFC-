@@ -16,9 +16,9 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'SPEED NFC — Bespoke Contactless Digital Distinction',
+  title: 'CONNECT NFC — Bespoke Digital Distinction',
   description:
-    'Premium NFC business cards and dynamic digital profiles crafted in titanium, carbon obsidian, and debossed heavy-ply cotton.',
+    'Premium NFC business cards and digital profiles that help you connect, share your credentials, and cultivate relationships with a single frictionless tap.',
 };
 
 export default function RootLayout({
@@ -31,6 +31,10 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Arvo:ital,wght@0,400;0,700;1,400;1,700&family=Zilla+Slab:wght@500;600;700&display=swap"
+          rel="stylesheet"
+        />
         <link
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
           rel="stylesheet"

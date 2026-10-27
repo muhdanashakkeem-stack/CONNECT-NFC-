@@ -22,7 +22,10 @@ export const Pricing: React.FC = () => {
           <span className="font-label-md text-label-md uppercase tracking-[0.22em] text-[#78716c] font-semibold mb-2">
             Investment Strategy
           </span>
-          <h2 className="font-display-lg text-display-lg text-[#1c1b1b] leading-tight">
+          <h2
+            className="text-display-lg text-[#1c1b1b] leading-tight"
+            style={{ fontFamily: "'Rockwell', 'Zilla Slab', 'Arvo', serif", fontWeight: 700 }}
+          >
             Tailored Investment for Lasting Impressions
           </h2>
           <p className="font-body-lg text-body-lg text-[#57534e] max-w-xl mt-space-sm leading-relaxed">
@@ -96,9 +99,9 @@ export const Pricing: React.FC = () => {
           <div className="p-space-lg rounded-xl bg-white shadow-sm flex flex-col justify-between">
             <div className="flex flex-col">
               <span className="font-label-sm text-label-sm uppercase tracking-[0.2em] text-[#78716c]">Tactile Standard</span>
-              <h3 className="font-title-lg text-title-lg font-bold text-[#1c1b1b] mt-1">NFC Business Card</h3>
+              <h3 className="font-title-lg text-title-lg font-bold text-[#1c1b1b] mt-1">CONNECT NFC Card</h3>
               <p className="font-body-sm text-body-sm text-[#78716c] mt-1">
-                Precision physical card + complete digital ecosystem.
+                Precision physical card + complete digital CONNECT NFC ecosystem. Instant tap transfer with lifetime cloud sync.
               </p>
               <div className="my-space-md">
                 <span className="font-display-md text-headline-lg font-semibold text-[#1c1b1b]">{prices.b}</span>
@@ -127,7 +130,7 @@ export const Pricing: React.FC = () => {
                 href="#contact"
                 className="w-full py-2.5 rounded-DEFAULT bg-[#1c1b1b] hover:bg-black text-white font-label-md text-label-md uppercase tracking-wider text-center block transition-all"
               >
-                Order NFC Card
+                Order CONNECT NFC Card
               </Link>
             </div>
           </div>
@@ -138,66 +141,70 @@ export const Pricing: React.FC = () => {
               Most Popular Reserve
             </div>
             <div className="flex flex-col pt-2">
-              <span className="font-label-sm text-label-sm uppercase tracking-[0.2em] text-secondary">Flagship Edition</span>
-              <h3 className="font-title-lg text-title-lg font-bold text-white mt-1">Premium Business</h3>
-              <p className="font-body-sm text-body-sm text-outline mt-1">Double card suite with custom domain and CRM sync.</p>
+              <span className="font-label-sm text-label-sm uppercase tracking-[0.2em] text-secondary">Bespoke Suite</span>
+              <h3 className="font-title-lg text-title-lg font-bold text-white mt-1">Full Luxury Digital Package</h3>
+              <p className="font-body-sm text-body-sm text-outline mt-1">
+                Both a personalized digital website + card + curated branded collateral.
+              </p>
               <div className="my-space-md">
                 <span className="font-display-md text-headline-lg font-semibold text-primary">{prices.c}</span>
                 <span className="font-label-sm text-label-sm text-outline ml-1">{prices.periodC}</span>
               </div>
-              <ul className="flex flex-col gap-2.5 font-body-sm text-body-sm text-on-surface-variant">
+              <ul className="flex flex-col gap-2.5 font-body-sm text-body-sm text-[#cbc6bd]">
                 <li className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary text-sm">check</span> 2x Bespoke Matte or Metal NFC Cards
+                  <span className="material-symbols-outlined text-secondary text-sm">check</span> 2x Laser-Engraved Titanium NFC Cards
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary text-sm">check</span> Custom personal domain routing
+                  <span className="material-symbols-outlined text-secondary text-sm">check</span> Bespoke multi-section personal website
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary text-sm">check</span> Reciprocal Lead Capture CRM sync
+                  <span className="material-symbols-outlined text-secondary-container text-sm">check</span> Custom domain routing & SSL
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary text-sm">check</span> Real-time analytics dashboard
+                  <span className="material-symbols-outlined text-secondary text-sm">check</span> Unlimited digital updates forever
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary text-sm">check</span> Priority white-glove setup (24h)
+                  <span className="material-symbols-outlined text-secondary text-sm">check</span> Priority WhatsApp Concierge support
                 </li>
               </ul>
             </div>
             <div className="pt-space-lg">
               <Link
                 href="#contact"
-                className="w-full py-3 rounded-DEFAULT bg-secondary-container hover:bg-[#a61318] text-white font-label-md text-label-md uppercase tracking-[0.2em] text-center block shadow-md transition-all"
+                className="w-full py-2.5 rounded-DEFAULT bg-secondary-container hover:bg-[#800b0e] text-white font-label-md text-label-md uppercase tracking-wider text-center block shadow-[0_4px_16px_rgba(163,28,27,0.45)] transition-all"
               >
-                Claim Premium Suite
+                Claim Luxury Suite
               </Link>
             </div>
           </div>
 
-          {/* Package D: Custom Corporate Suite */}
+          {/* Package D */}
           <div className="p-space-lg rounded-xl bg-white shadow-sm flex flex-col justify-between">
             <div className="flex flex-col">
-              <span className="font-label-sm text-label-sm uppercase tracking-[0.2em] text-[#78716c]">Enterprise</span>
-              <h3 className="font-title-lg text-title-lg font-bold text-[#1c1b1b] mt-1">Corporate Suite</h3>
-              <p className="font-body-sm text-body-sm text-[#78716c] mt-1">Centralized fleet control for 10 to 1,000+ executives.</p>
+              <span className="font-label-sm text-label-sm uppercase tracking-[0.2em] text-[#78716c]">Enterprise Protocol</span>
+              <h3 className="font-title-lg text-title-lg font-bold text-[#1c1b1b] mt-1">Corporate Fleet Edition</h3>
+              <p className="font-body-sm text-body-sm text-[#78716c] mt-1">
+                Volume deployment for firms, executive committees, and luxury advisory teams.
+              </p>
               <div className="my-space-md">
                 <span className="font-display-md text-headline-lg font-semibold text-[#1c1b1b]">Custom</span>
-                <span className="font-label-sm text-label-sm text-[#78716c] ml-1">/ bespoke volume</span>
+                <span className="font-label-sm text-label-sm text-[#78716c] ml-1">/ tier commission</span>
               </div>
               <ul className="flex flex-col gap-2.5 font-body-sm text-body-sm text-[#44403c]">
                 <li className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary-container text-sm">check</span> Centralized MDM admin dashboard
+                  <span className="material-symbols-outlined text-secondary-container text-sm">check</span> 10+ Bespoke cards batch-milled
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary-container text-sm">check</span> Bulk employee profile deployment
+                  <span className="material-symbols-outlined text-secondary-container text-sm">check</span> Centralized employee dashboard
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary-container text-sm">check</span> Custom brand token governance
+                  <span className="material-symbols-outlined text-secondary-container text-sm">check</span> Single sign-on & team analytics
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary-container text-sm">check</span> Single Sign-On (Okta / Azure AD)
+                  <span className="material-symbols-outlined text-secondary-container text-sm">check</span> Enterprise SLA & account partner
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-secondary-container text-sm">check</span> Dedicated executive concierge
+                  <span className="material-symbols-outlined text-secondary-container text-sm">check</span> Global consolidated courier
                 </li>
               </ul>
             </div>
@@ -206,7 +213,7 @@ export const Pricing: React.FC = () => {
                 href="#contact"
                 className="w-full py-2.5 rounded-DEFAULT bg-[#1c1b1b] hover:bg-black text-white font-label-md text-label-md uppercase tracking-wider text-center block transition-all"
               >
-                Request Fleet Proposal
+                Request Enterprise RFP
               </Link>
             </div>
           </div>

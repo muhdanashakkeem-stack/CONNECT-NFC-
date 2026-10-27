@@ -13,13 +13,13 @@ export const DashboardNavbar: React.FC = () => {
       <div className="flex items-center gap-4">
         <Link href="/" className="flex items-center gap-2 group">
           <img
-            alt="Speed NFC Emblem"
+            alt="CONNECT NFC Emblem"
             className="h-8 w-auto object-contain"
             src="https://lh3.googleusercontent.com/aida/AEtjO1UrhtUczzO6AFHRwc8fymc-EB9kER5AMz0Dcw__tVjbcPmTV1lGEow3eEkvXcxy_aE2Ug6qCfw7r-uFl9fT22Vvv3IJwXCmdupxoXDyQS-xo0ZCqbQJTC_uNUpFY0VnCMoUWh1smr6TaipZ5XcG0UhFFOUgbVVd8rGeVCLge0zgdmwd6n_qgzT4lCSZRsI3W2GoZ1qXZL45hKLkCGf8Aw1KyaTm1Pz0Jgy_R93jF7SMMVEQQTQIw12uiHA"
           />
           <div className="flex flex-col">
             <span className="font-display-md text-sm uppercase tracking-widest text-primary font-semibold group-hover:text-secondary-fixed transition-colors">
-              Speed NFC
+              CONNECT NFC
             </span>
             <span className="text-[10px] uppercase tracking-wider text-outline">
               Executive Console

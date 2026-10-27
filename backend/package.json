@@ -1,7 +1,7 @@
 {
-  "name": "nfc-speed-backend",
+  "name": "connect-nfc-backend",
   "version": "1.0.0",
-  "description": "Speed NFC - Express.js REST API Server",
+  "description": "CONNECT NFC - Express.js REST API Server",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

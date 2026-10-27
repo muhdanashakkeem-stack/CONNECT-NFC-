@@ -38,11 +38,11 @@ app.use(express.json());
 const USERS_DATABASE = [
   {
     id: 'usr_admin_01',
-    email: 'admin@speednfc.com',
+    email: 'admin@connectnfc.com',
     password: 'admin_secret_pass',
     name: 'Noram Micro (Super Admin)',
     role: 'admin',
-    company: 'Speed NFC Headquarters',
+    company: 'CONNECT NFC Headquarters',
     title: 'Platform Administrator',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
     createdAt: new Date().toISOString(),
@@ -118,7 +118,7 @@ let ORDERS_DATABASE = [
     id: 'ord_9901',
     userId: 'usr_cust_03',
     orderNumber: 'SNFC-2026-8812',
-    tier: 'speed-obsidian',
+    tier: 'connect-obsidian',
     cardFinish: 'Matte Obsidian Carbon',
     engravingText: 'ELENA ROSTOVA // CREATIVE DIRECTOR',
     quantity: 1,
@@ -177,7 +177,7 @@ app.get('/api/health', (req, res) => {
     status: 'online',
     timestamp: new Date().toISOString(),
     supabaseConnected: !!supabase,
-    service: 'Speed NFC Backend Express Server',
+    service: 'CONNECT NFC Backend Express Server',
     port: PORT,
   });
 });
@@ -274,11 +274,11 @@ app.get('/api/cards/public/:slug', (req, res) => {
       success: true,
       data: {
         cardholderName: req.params.slug.replace('-', ' ').toUpperCase(),
-        headlineTitle: 'Speed NFC Executive Cardholder',
+        headlineTitle: 'CONNECT NFC Executive Cardholder',
         companyName: 'Private Reserve Client',
-        bio: 'Contactless credentials verified on Speed NFC network.',
+        bio: 'Contactless credentials verified on CONNECT NFC network.',
         phone: '+44 20 7946 0912',
-        email: 'concierge@speednfc.com',
+        email: 'concierge@connectnfc.com',
         finish: 'obsidian',
       },
     });
@@ -302,7 +302,7 @@ app.post('/api/inquiries', (req, res) => {
     fullName,
     workEmail,
     phone: phone || '',
-    tier: tier || 'speed-obsidian',
+    tier: tier || 'connect-obsidian',
     notes: notes || '',
     status: 'new',
     createdAt: new Date().toISOString(),
@@ -334,7 +334,7 @@ app.get('/api/orders', requireAuth, (req, res) => {
 // Start Express server
 app.listen(PORT, () => {
   console.log(`=========================================`);
-  console.log(` SPEED NFC BACKEND EXPRESS API ACTIVE`);
+  console.log(` CONNECT NFC BACKEND EXPRESS API ACTIVE`);
   console.log(` Listening on: http://localhost:${PORT}`);
   console.log(` Allowed CORS: ${CLIENT_URL}`);
   console.log(` JWT Engine:   Backend Managed`);

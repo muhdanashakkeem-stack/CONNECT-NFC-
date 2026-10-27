@@ -9,7 +9,7 @@ export const ContactPortal: React.FC = () => {
     fullName: '',
     workEmail: '',
     phone: '',
-    tier: 'speed-obsidian' as TierPackage,
+    tier: 'connect-obsidian' as TierPackage,
     notes: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -47,7 +47,10 @@ export const ContactPortal: React.FC = () => {
           <span className="font-label-md text-label-md uppercase tracking-[0.24em] text-secondary font-semibold mb-2">
             Direct Atelier Concierge
           </span>
-          <h2 className="font-display-lg text-display-lg text-primary max-w-2xl leading-tight">
+          <h2
+            className="text-display-lg text-primary max-w-2xl leading-tight"
+            style={{ fontFamily: "'Rockwell', 'Zilla Slab', 'Arvo', serif", fontWeight: 700 }}
+          >
             Commission Your Signature Identity
           </h2>
           <p className="font-body-lg text-body-lg text-on-surface-variant max-w-xl mt-space-sm leading-relaxed">
@@ -72,7 +75,7 @@ export const ContactPortal: React.FC = () => {
               <div className="flex flex-col gap-space-sm pt-space-xs">
                 {/* Email Button */}
                 <a
-                  href="mailto:concierge@speednfc.com"
+                  href="mailto:concierge@connectnfc.com"
                   className="w-full p-4 rounded-xl bg-[#171717] hover:bg-[#1f1e1d] border border-[#2a2a2a] hover:border-secondary transition-all flex items-center justify-between group shadow-sm"
                 >
                   <div className="flex items-center gap-space-md">
@@ -81,7 +84,7 @@ export const ContactPortal: React.FC = () => {
                     </div>
                     <div className="flex flex-col">
                       <span className="font-title-md text-title-md text-primary font-medium">Email Concierge</span>
-                      <span className="font-body-sm text-body-sm text-outline">concierge@speednfc.com</span>
+                      <span className="font-body-sm text-body-sm text-outline">concierge@connectnfc.com</span>
                     </div>
                   </div>
                   <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors text-lg">
@@ -123,28 +126,7 @@ export const ContactPortal: React.FC = () => {
                     </div>
                     <div className="flex flex-col">
                       <span className="font-title-md text-title-md text-primary font-medium">Instagram</span>
-                      <span className="font-body-sm text-body-sm text-outline">@speednfc.official</span>
-                    </div>
-                  </div>
-                  <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors text-lg">
-                    arrow_forward
-                  </span>
-                </a>
-
-                {/* YouTube Button */}
-                <a
-                  href="#"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full p-4 rounded-xl bg-[#171717] hover:bg-[#1f1e1d] border border-[#2a2a2a] hover:border-secondary transition-all flex items-center justify-between group shadow-sm"
-                >
-                  <div className="flex items-center gap-space-md">
-                    <div className="w-10 h-10 rounded-lg bg-surface-container-high group-hover:bg-secondary-container/30 flex items-center justify-center text-secondary transition-colors">
-                      <span className="material-symbols-outlined text-xl">smart_display</span>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-title-md text-title-md text-primary font-medium">YouTube Channel</span>
-                      <span className="font-body-sm text-body-sm text-outline">NFC Demonstrations & Guides</span>
+                      <span className="font-body-sm text-body-sm text-outline">@connectnfc</span>
                     </div>
                   </div>
                   <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors text-lg">
@@ -153,10 +135,21 @@ export const ContactPortal: React.FC = () => {
                 </a>
               </div>
             </div>
+
+            {/* Direct Studio Guarantee Card */}
+            <div className="p-space-md rounded-xl bg-surface-container-low border border-[#2a2a2a] flex items-center gap-space-md">
+              <span className="material-symbols-outlined text-2xl text-secondary">verified_user</span>
+              <div className="flex flex-col">
+                <span className="font-title-md text-title-md text-primary font-medium">Atelier Guarantee</span>
+                <span className="font-body-sm text-body-sm text-outline">
+                  Lifetime NFC chip warranty & replacement re-write assurance.
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* Right: Commission Inquiry Form */}
-          <div className="lg:col-span-7 p-space-lg rounded-xl bg-surface-container-low border border-[#2a2a2a] shadow-xl flex flex-col justify-between">
+          <div className="lg:col-span-7 p-space-xl rounded-xl bg-surface-container-low shadow-2xl border border-[#2a2a2a] flex flex-col justify-between">
             <form className="flex flex-col gap-space-md" onSubmit={handleSubmit}>
               <div className="flex flex-col gap-1">
                 <label className="font-label-sm text-label-sm uppercase tracking-[0.18em] text-outline">Full Name</label>
@@ -201,9 +194,9 @@ export const ContactPortal: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, tier: e.target.value as TierPackage })}
                   className="w-full px-space-sm py-2.5 rounded-DEFAULT bg-surface text-on-surface font-body-md text-body-md focus:outline-none focus:ring-1 focus:ring-secondary transition-all border border-outline-variant/30"
                 >
-                  <option value="speed-obsidian">Speed NFC // Obsidian Black (₹4,999)</option>
-                  <option value="speed-crimson">Speed NFC // Crimson Reserve (₹8,999)</option>
-                  <option value="speed-titanium">Speed NFC // Titanium Edition (Bespoke)</option>
+                  <option value="connect-obsidian">CONNECT NFC // Obsidian Black (₹4,999)</option>
+                  <option value="connect-crimson">CONNECT NFC // Crimson Reserve (₹8,999)</option>
+                  <option value="connect-titanium">CONNECT NFC // Titanium Edition (Bespoke)</option>
                   <option value="digital-profile">Digital Profile Tier (₹2,499)</option>
                   <option value="corporate-fleet">Enterprise Fleet Suite (Custom)</option>
                 </select>
@@ -211,32 +204,44 @@ export const ContactPortal: React.FC = () => {
 
               <div className="flex flex-col gap-1">
                 <label className="font-label-sm text-label-sm uppercase tracking-[0.18em] text-outline">
-                  Commission / Card Customization Notes
+                  Engraving Details / Special Specifications
                 </label>
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="Detail logo engraving, card finish preferences, and expected quantity..."
-                  className="w-full px-space-sm py-2.5 rounded-DEFAULT bg-surface text-on-surface font-body-md text-body-md placeholder:text-outline/60 focus:outline-none focus:ring-1 focus:ring-secondary transition-all border border-outline-variant/30"
-                />
+                  placeholder="State corporate card quantities, custom metal finish preferences, logo vector availability, or bespoke domain requirements..."
+                  className="w-full px-space-sm py-2 rounded-DEFAULT bg-surface text-on-surface font-body-md text-body-md placeholder:text-outline/60 focus:outline-none focus:ring-1 focus:ring-secondary transition-all border border-outline-variant/30 resize-none"
+                ></textarea>
               </div>
 
-              {!isSubmitted ? (
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full py-3 rounded-DEFAULT bg-secondary-container hover:bg-[#a61318] disabled:opacity-50 text-white font-label-md text-label-md uppercase tracking-[0.2em] shadow-md transition-all flex items-center justify-center gap-2 mt-space-xs"
+              {statusMessage && (
+                <div
+                  className={`p-3 rounded font-body-sm text-body-sm flex items-center gap-2 ${
+                    isSubmitted ? 'bg-emerald-950/80 text-emerald-300' : 'bg-red-950/80 text-red-300'
+                  }`}
                 >
-                  <span>{isSubmitting ? 'Processing Commission...' : 'Submit Commission Inquiry'}</span>
-                  <span className="material-symbols-outlined text-[16px]">send</span>
-                </button>
-              ) : (
-                <div className="p-space-sm rounded bg-emerald-950/80 text-emerald-300 font-label-sm text-label-sm text-center flex items-center justify-center gap-2 border border-emerald-800">
-                  <span className="material-symbols-outlined text-base">check_circle</span>
-                  {statusMessage}
+                  <span className="material-symbols-outlined text-sm">
+                    {isSubmitted ? 'check_circle' : 'error'}
+                  </span>
+                  <span>{statusMessage}</span>
                 </div>
               )}
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-3 rounded-DEFAULT bg-secondary-container hover:bg-[#800b0e] text-on-surface font-label-md text-label-md uppercase tracking-[0.2em] shadow-[0_6px_24px_rgba(148,14,18,0.5)] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isSubmitting ? (
+                  <span>Transmitting...</span>
+                ) : (
+                  <>
+                    <span>Submit Commission Inquiry</span>
+                    <span className="material-symbols-outlined text-[16px]">send</span>
+                  </>
+                )}
+              </button>
             </form>
           </div>
         </div>

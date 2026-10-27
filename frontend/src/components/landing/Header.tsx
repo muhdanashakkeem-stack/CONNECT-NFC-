@@ -10,57 +10,84 @@ export const Header: React.FC = () => {
   const dashboardPath = role === 'admin' ? '/admin' : role === 'client' ? '/client' : '/customer';
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-[#171717]/85 backdrop-blur-2xl shadow-[0_1px_16px_rgba(0,0,0,0.60)]">
-      <div className="h-20 w-full max-w-[1280px] mx-auto px-margin-mobile md:px-margin-tablet lg:px-margin flex items-center justify-between gap-space-md">
-        <Link href="/" className="flex items-center gap-space-sm flex-shrink-0">
+    <header className="fixed top-4 left-0 right-0 z-50 flex justify-center px-4 md:px-8 pointer-events-none">
+      <div
+        className="pointer-events-auto w-full max-w-[1240px] h-[72px] px-6 rounded-full flex items-center justify-between gap-space-md transition-all duration-300"
+        style={{
+          background: 'linear-gradient(145deg, #191919, #111111)',
+          boxShadow: '8px 8px 20px #090909, -6px -6px 16px rgba(255, 255, 255, 0.05)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+        }}
+      >
+        <Link
+          href="/"
+          className="flex items-center gap-3 flex-shrink-0 px-3.5 py-1.5 rounded-full"
+          style={{
+            background: '#141414',
+            boxShadow: 'inset 2px 2px 5px #0a0a0a, inset -2px -2px 5px rgba(255, 255, 255, 0.04)',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+          }}
+        >
           <img
-            alt="Speed NFC Luxury Brand Emblem"
-            className="h-8 w-auto object-contain"
+            alt="NFC Connect Luxury Brand Emblem"
+            className="h-7 w-auto object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
             src="https://lh3.googleusercontent.com/aida/AEtjO1UrhtUczzO6AFHRwc8fymc-EB9kER5AMz0Dcw__tVjbcPmTV1lGEow3eEkvXcxy_aE2Ug6qCfw7r-uFl9fT22Vvv3IJwXCmdupxoXDyQS-xo0ZCqbQJTC_uNUpFY0VnCMoUWh1smr6TaipZ5XcG0UhFFOUgbVVd8rGeVCLge0zgdmwd6n_qgzT4lCSZRsI3W2GoZ1qXZL45hKLkCGf8Aw1KyaTm1Pz0Jgy_R93jF7SMMVEQQTQIw12uiHA"
           />
-          <div className="flex flex-col tracking-wider">
-            <span className="font-display-md text-sm font-semibold uppercase tracking-widest text-primary">
-              Speed NFC
-            </span>
-          </div>
+          <span
+            className="flex flex-col tracking-wider text-primary font-bold text-title-md"
+            style={{
+              fontFamily: "'Rockwell', 'Zilla Slab', 'Arvo', serif",
+              fontWeight: 700,
+              letterSpacing: '0.09em',
+              textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+            }}
+          >
+            CONNECT NFC
+          </span>
         </Link>
 
-        <nav className="hidden xl:flex items-center gap-space-lg">
+        <nav
+          className="hidden xl:flex items-center gap-1.5 p-1.5 rounded-full"
+          style={{
+            background: '#101010',
+            boxShadow: 'inset 3px 3px 7px #070707, inset -2px -2px 6px rgba(255, 255, 255, 0.03)',
+            border: '1px solid rgba(255, 255, 255, 0.04)',
+          }}
+        >
           <Link
-            href="#home"
-            className="font-label-md text-label-md uppercase tracking-[0.16em] text-primary relative after:absolute after:bottom-[-6px] after:left-0 after:w-full after:h-[1px] after:bg-primary font-semibold py-1 transition-colors"
+            href="/"
+            className="px-4 py-1.5 rounded-full font-label-md text-label-md uppercase tracking-[0.16em] text-white font-semibold transition-all"
+            style={{
+              background: 'linear-gradient(145deg, #1e1e1e, #141414)',
+              boxShadow: '3px 3px 8px #080808, -2px -2px 6px rgba(255, 255, 255, 0.06)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+            }}
           >
             Home
           </Link>
           <Link
             href="#profile-showcase"
-            className="font-label-md text-label-md uppercase tracking-[0.16em] text-on-surface-variant hover:text-primary transition-colors py-1"
+            className="px-4 py-1.5 rounded-full font-label-md text-label-md uppercase tracking-[0.16em] text-[#949088] hover:text-white transition-all hover:bg-[#131313]"
           >
-            Digital Profile
+            Profile Showcase
           </Link>
           <Link
             href="#services"
-            className="font-label-md text-label-md uppercase tracking-[0.16em] text-on-surface-variant hover:text-primary transition-colors py-1"
+            className="px-4 py-1.5 rounded-full font-label-md text-label-md uppercase tracking-[0.16em] text-[#949088] hover:text-white transition-all hover:bg-[#131313]"
           >
             Services
           </Link>
           <Link
-            href="#packages"
-            className="font-label-md text-label-md uppercase tracking-[0.16em] text-on-surface-variant hover:text-primary transition-colors py-1"
-          >
-            Packages & Pricing
-          </Link>
-          <Link
             href="#how-it-works"
-            className="font-label-md text-label-md uppercase tracking-[0.16em] text-on-surface-variant hover:text-primary transition-colors py-1"
+            className="px-4 py-1.5 rounded-full font-label-md text-label-md uppercase tracking-[0.16em] text-[#949088] hover:text-white transition-all hover:bg-[#131313]"
           >
             How It Works
           </Link>
           <Link
             href="#contact"
-            className="font-label-md text-label-md uppercase tracking-[0.16em] text-on-surface-variant hover:text-primary transition-colors py-1"
+            className="px-4 py-1.5 rounded-full font-label-md text-label-md uppercase tracking-[0.16em] text-[#949088] hover:text-white transition-all hover:bg-[#131313]"
           >
-            Concierge
+            Contact
           </Link>
         </nav>
 
@@ -68,7 +95,13 @@ export const Header: React.FC = () => {
           {isAuthenticated ? (
             <Link
               href={dashboardPath}
-              className="inline-flex items-center justify-center px-space-md py-2.5 rounded-DEFAULT bg-secondary-container hover:bg-[#800b0e] text-on-surface font-label-md text-label-md uppercase tracking-[0.18em] shadow-[0_4px_16px_rgba(163,28,27,0.35)] transition-all gap-1.5"
+              className="inline-flex items-center justify-center px-5 py-2.5 rounded-full text-white font-label-md text-label-md uppercase tracking-[0.18em] transition-all transform hover:-translate-y-0.5 active:translate-y-0.5 gap-1.5"
+              style={{
+                background: 'linear-gradient(135deg, #a61318 0%, #690006 100%)',
+                boxShadow:
+                  '4px 4px 12px #080808, -2px -2px 8px rgba(255, 255, 255, 0.08), inset 1px 1px 2px rgba(255, 255, 255, 0.25)',
+                border: '1px solid rgba(255, 180, 171, 0.25)',
+              }}
             >
               <span>Dashboard ({role})</span>
               <span className="material-symbols-outlined text-sm">arrow_forward</span>
@@ -76,7 +109,13 @@ export const Header: React.FC = () => {
           ) : (
             <Link
               href="/login"
-              className="inline-flex items-center justify-center px-space-md py-2.5 rounded-DEFAULT bg-secondary-container hover:bg-[#800b0e] text-on-surface font-label-md text-label-md uppercase tracking-[0.18em] shadow-[0_4px_16px_rgba(163,28,27,0.35)] transition-all"
+              className="inline-flex items-center justify-center px-5 py-2.5 rounded-full text-white font-label-md text-label-md uppercase tracking-[0.18em] transition-all transform hover:-translate-y-0.5 active:translate-y-0.5"
+              style={{
+                background: 'linear-gradient(135deg, #a61318 0%, #690006 100%)',
+                boxShadow:
+                  '4px 4px 12px #080808, -2px -2px 8px rgba(255, 255, 255, 0.08), inset 1px 1px 2px rgba(255, 255, 255, 0.25)',
+                border: '1px solid rgba(255, 180, 171, 0.25)',
+              }}
             >
               Sign In
             </Link>

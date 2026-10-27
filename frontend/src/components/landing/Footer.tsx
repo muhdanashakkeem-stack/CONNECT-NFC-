@@ -11,12 +11,19 @@ export const Footer: React.FC = () => {
           <div className="lg:col-span-5 flex flex-col gap-space-md">
             <div className="flex items-center gap-space-sm">
               <img
-                alt="Speed NFC Luxury Brand Emblem"
+                alt="NFC Connect Luxury Brand Emblem"
                 className="h-8 w-auto object-contain"
                 src="https://lh3.googleusercontent.com/aida/AEtjO1UrhtUczzO6AFHRwc8fymc-EB9kER5AMz0Dcw__tVjbcPmTV1lGEow3eEkvXcxy_aE2Ug6qCfw7r-uFl9fT22Vvv3IJwXCmdupxoXDyQS-xo0ZCqbQJTC_uNUpFY0VnCMoUWh1smr6TaipZ5XcG0UhFFOUgbVVd8rGeVCLge0zgdmwd6n_qgzT4lCSZRsI3W2GoZ1qXZL45hKLkCGf8Aw1KyaTm1Pz0Jgy_R93jF7SMMVEQQTQIw12uiHA"
               />
-              <span className="font-display-md text-headline-sm uppercase tracking-widest text-primary leading-none">
-                SPEED NFC
+              <span
+                className="text-headline-sm uppercase tracking-widest text-primary leading-none"
+                style={{
+                  fontFamily: "'Rockwell', 'Zilla Slab', 'Arvo', serif",
+                  fontWeight: 700,
+                  letterSpacing: '0.1em',
+                }}
+              >
+                CONNECT NFC
               </span>
             </div>
             <p className="font-body-md text-body-md text-outline max-w-md leading-relaxed">
@@ -48,45 +55,52 @@ export const Footer: React.FC = () => {
           </div>
 
           <div className="lg:col-span-3 flex flex-col gap-space-sm">
-            <h4 className="font-label-md text-label-md uppercase tracking-[0.2em] text-primary mb-space-xs font-semibold">
+            <h4 className="font-label-md text-label-md uppercase tracking-[0.2em] text-primary mb-space-xs">
               Crafted Editions
             </h4>
-            <Link className="font-body-sm text-body-sm text-outline hover:text-on-surface transition-colors" href="#profile-showcase">
+            <Link href="#profile-showcase" className="font-body-sm text-body-sm text-outline hover:text-on-surface transition-colors">
               Brushed Titanium Reserve
             </Link>
-            <Link className="font-body-sm text-body-sm text-outline hover:text-on-surface transition-colors" href="#profile-showcase">
+            <Link href="#profile-showcase" className="font-body-sm text-body-sm text-outline hover:text-on-surface transition-colors">
               Matte Obsidian Carbon
             </Link>
-            <Link className="font-body-sm text-body-sm text-outline hover:text-on-surface transition-colors" href="#profile-showcase">
+            <Link href="#profile-showcase" className="font-body-sm text-body-sm text-outline hover:text-on-surface transition-colors">
               Debossed 600gsm Cotton
             </Link>
-            <Link className="font-body-sm text-body-sm text-outline hover:text-on-surface transition-colors" href="#services">
+            <Link href="#services" className="font-body-sm text-body-sm text-outline hover:text-on-surface transition-colors">
               Enterprise Fleet Architecture
             </Link>
-            <Link className="font-body-sm text-body-sm text-outline hover:text-on-surface transition-colors" href="#packages">
+            <Link href="#packages" className="font-body-sm text-body-sm text-outline hover:text-on-surface transition-colors">
               Private Commission Suite
             </Link>
           </div>
 
           <div className="lg:col-span-4 flex flex-col gap-space-sm">
-            <h4 className="font-label-md text-label-md uppercase tracking-[0.2em] text-primary mb-space-xs font-semibold">
-              Portals & Architecture
+            <h4 className="font-label-md text-label-md uppercase tracking-[0.2em] text-primary mb-space-xs">
+              Private Concierge
             </h4>
-            <Link className="font-body-sm text-body-sm text-outline hover:text-on-surface transition-colors" href="/login">
-              Executive Client Login
+            <p className="font-body-sm text-body-sm text-outline">
+              For volume corporate fleet inquiries or custom alloy metallurgy orders:
+            </p>
+            <span className="font-title-md text-title-md text-primary font-medium mt-1">
+              concierge@connectnfc.com
+            </span>
+            <span className="font-body-sm text-body-sm text-outline">London · Zurich · Mumbai · New York</span>
+          </div>
+        </div>
+
+        <div className="pt-space-md border-t border-outline-variant/10 flex flex-col sm:flex-row items-center justify-between gap-space-sm font-label-sm text-label-sm uppercase tracking-widest text-outline">
+          <span>&copy; {new Date().getFullYear()} CONNECT NFC Atelier. All rights reserved.</span>
+          <div className="flex items-center gap-space-md">
+            <Link href="#" className="hover:text-primary transition-colors">
+              Privacy Protocol
             </Link>
-            <Link className="font-body-sm text-body-sm text-outline hover:text-on-surface transition-colors" href="/admin">
-              Super Admin Fleet Console
+            <Link href="#" className="hover:text-primary transition-colors">
+              Terms of Commission
             </Link>
-            <Link className="font-body-sm text-body-sm text-outline hover:text-on-surface transition-colors" href="/client">
-              Private Client Digital Matrix
+            <Link href="#" className="hover:text-primary transition-colors">
+              NFC Specifications
             </Link>
-            <Link className="font-body-sm text-body-sm text-outline hover:text-on-surface transition-colors" href="/customer">
-              Customer Card Lounge
-            </Link>
-            <div className="pt-2 text-[11px] font-mono text-outline/70">
-              © 2026 SPEED NFC INC. ALL RIGHTS RESERVED.
-            </div>
           </div>
         </div>
       </div>

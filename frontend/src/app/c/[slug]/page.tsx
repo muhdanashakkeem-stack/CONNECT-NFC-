@@ -41,7 +41,7 @@ export default function PublicCardView({ params }: { params: { slug: string } })
               <span className="material-symbols-outlined text-secondary text-[16px]">verified</span>
             </div>
             <p className="font-label-sm text-[11px] uppercase tracking-[0.16em] text-[#cbb892] mt-0.5">
-              SPEED NFC // PRIVATE CLIENT
+              CONNECT NFC // PRIVATE CLIENT
             </p>
             <p className="font-body-sm text-xs text-gray-400 mt-1 max-w-[240px]">
               Managing Partner & Founder · Vance & Partners Advisory
@@ -90,7 +90,7 @@ export default function PublicCardView({ params }: { params: { slug: string } })
 
       <div className="mt-6 text-center">
         <Link href="/" className="text-xs text-outline hover:text-white font-label-sm uppercase tracking-wider">
-          Powered by SPEED NFC Bespoke Hardware
+          Powered by CONNECT NFC Bespoke Hardware
         </Link>
       </div>
     </div>

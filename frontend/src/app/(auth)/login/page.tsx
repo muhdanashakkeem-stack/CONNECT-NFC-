@@ -65,12 +65,12 @@ export default function LoginPage() {
       <div className="flex items-center justify-between max-w-5xl w-full mx-auto">
         <Link href="/" className="flex items-center gap-2 group">
           <img
-            alt="Speed NFC Emblem"
+            alt="CONNECT NFC Emblem"
             className="h-8 w-auto object-contain"
             src="https://lh3.googleusercontent.com/aida/AEtjO1UrhtUczzO6AFHRwc8fymc-EB9kER5AMz0Dcw__tVjbcPmTV1lGEow3eEkvXcxy_aE2Ug6qCfw7r-uFl9fT22Vvv3IJwXCmdupxoXDyQS-xo0ZCqbQJTC_uNUpFY0VnCMoUWh1smr6TaipZ5XcG0UhFFOUgbVVd8rGeVCLge0zgdmwd6n_qgzT4lCSZRsI3W2GoZ1qXZL45hKLkCGf8Aw1KyaTm1Pz0Jgy_R93jF7SMMVEQQTQIw12uiHA"
           />
           <span className="font-display-md text-base uppercase tracking-widest text-primary font-semibold">
-            SPEED NFC
+            CONNECT NFC
           </span>
         </Link>
         <BackendStatusPill />
@@ -186,7 +186,7 @@ export default function LoginPage() {
 
       {/* Footer Security Note */}
       <div className="text-center text-[11px] text-outline/60 font-mono">
-        Backend-Enforced Authentication & Role Authorization · Speed NFC Inc.
+        Backend-Enforced Authentication & Role Authorization · CONNECT NFC Inc.
       </div>
     </div>
   );

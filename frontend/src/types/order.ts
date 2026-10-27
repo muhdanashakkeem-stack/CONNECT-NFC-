@@ -1,5 +1,13 @@
 export type OrderStatus = 'pending' | 'in_production' | 'engraved' | 'dispatched' | 'delivered';
-export type TierPackage = 'speed-obsidian' | 'speed-crimson' | 'speed-titanium' | 'digital-profile' | 'corporate-fleet';
+export type TierPackage =
+  | 'connect-obsidian'
+  | 'connect-crimson'
+  | 'connect-titanium'
+  | 'speed-obsidian'
+  | 'speed-crimson'
+  | 'speed-titanium'
+  | 'digital-profile'
+  | 'corporate-fleet';
 
 export interface CommissionInquiry {
   id: string;

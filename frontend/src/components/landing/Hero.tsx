@@ -21,8 +21,11 @@ export const Hero: React.FC = () => {
               </span>
             </div>
 
-            <h1 className="font-display-lg text-display-lg text-primary tracking-tight leading-[1.08]">
-              Speed NFC — <br />
+            <h1
+              className="text-display-lg text-primary tracking-tight leading-[1.08]"
+              style={{ fontFamily: "'Rockwell', 'Zilla Slab', 'Arvo', serif", fontWeight: 700 }}
+            >
+              CONNECT NFC — <br />
               <span className="font-headline-lg italic font-normal text-tertiary-fixed">
                 Your Identity, One Tap Away.
               </span>
@@ -78,7 +81,12 @@ export const Hero: React.FC = () => {
               </div>
               <div className="flex flex-col">
                 <span className="font-label-sm text-label-sm uppercase tracking-[0.2em] text-secondary/80">EDITION // 01</span>
-                <span className="font-display-md text-headline-sm text-primary tracking-wide">SPEED NFC</span>
+                <span
+                  className="text-headline-sm text-primary tracking-wide"
+                  style={{ fontFamily: "'Rockwell', 'Zilla Slab', 'Arvo', serif", fontWeight: 700 }}
+                >
+                  CONNECT NFC
+                </span>
                 <span className="font-label-sm text-label-sm tracking-widest text-stone-300 uppercase mt-0.5">CRIMSON RESERVE</span>
               </div>
             </div>
@@ -96,7 +104,12 @@ export const Hero: React.FC = () => {
               </div>
               <div className="flex flex-col">
                 <div className="font-label-sm text-label-sm uppercase tracking-[0.22em] text-tertiary-fixed-dim">ENTERPRISE // SPEC</div>
-                <div className="font-display-md text-headline-sm text-primary tracking-wide">SPEED NFC</div>
+                <div
+                  className="text-headline-sm text-primary tracking-wide"
+                  style={{ fontFamily: "'Rockwell', 'Zilla Slab', 'Arvo', serif", fontWeight: 700 }}
+                >
+                  CONNECT NFC
+                </div>
                 <div className="font-label-sm text-label-sm tracking-widest text-outline uppercase mt-0.5">TITANIUM EDITION</div>
               </div>
             </div>
@@ -112,7 +125,12 @@ export const Hero: React.FC = () => {
               </div>
               <div className="flex flex-col">
                 <div className="font-label-sm text-label-sm uppercase tracking-[0.22em] text-stone-400">EXECUTIVE TIER</div>
-                <div className="font-display-md text-headline-sm text-primary tracking-wide">SPEED NFC</div>
+                <div
+                  className="text-headline-sm text-primary tracking-wide"
+                  style={{ fontFamily: "'Rockwell', 'Zilla Slab', 'Arvo', serif", fontWeight: 700 }}
+                >
+                  CONNECT NFC
+                </div>
                 <div className="font-label-sm text-label-sm tracking-widest text-outline uppercase mt-0.5">OBSIDIAN BLACK</div>
               </div>
             </div>

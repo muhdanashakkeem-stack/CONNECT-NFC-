@@ -36,7 +36,7 @@ const PREVIEW_USERS: Record<UserRole, User> = {
     email: 'admin@speednfc.com',
     name: 'Noram Micro (Super Admin)',
     role: 'admin',
-    company: 'Speed NFC Headquarters',
+    company: 'CONNECT NFC Headquarters',
     title: 'Platform Administrator',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
     createdAt: new Date().toISOString(),

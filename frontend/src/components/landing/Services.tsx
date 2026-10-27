@@ -50,7 +50,10 @@ export const Services: React.FC = () => {
           <span className="font-label-md text-label-md uppercase tracking-[0.24em] text-tertiary-fixed-dim font-semibold mb-2">
             Tailored Digital Architecture
           </span>
-          <h2 className="font-display-lg text-display-lg text-primary max-w-3xl leading-tight">
+          <h2
+            className="text-display-lg text-primary max-w-3xl leading-tight"
+            style={{ fontFamily: "'Rockwell', 'Zilla Slab', 'Arvo', serif", fontWeight: 700 }}
+          >
             Digital Solutions for Modern Professionals
           </h2>
           <p className="font-body-lg text-body-lg text-outline max-w-2xl mt-space-sm leading-relaxed">
@@ -59,22 +62,28 @@ export const Services: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-space-md">
-          {SERVICES.map((s) => (
+          {SERVICES.map((s, idx) => (
             <div
-              key={s.title}
+              key={idx}
               className="p-space-lg rounded-xl bg-[#0c1a13] shadow-md hover:shadow-xl transition-all duration-300 flex flex-col justify-between group"
             >
               <div className="flex flex-col gap-space-sm">
                 <div className="w-12 h-12 rounded-lg bg-surface-container-high/60 flex items-center justify-center text-tertiary-fixed-dim group-hover:text-primary transition-colors">
                   <span className="material-symbols-outlined text-2xl">{s.icon}</span>
                 </div>
-                <h3 className="font-headline-md text-headline-sm text-primary font-normal">{s.title}</h3>
-                <p className="font-body-md text-body-md text-on-surface-variant leading-relaxed">{s.desc}</p>
+                <h3 className="font-title-lg text-title-lg text-primary font-semibold">{s.title}</h3>
+                <p className="font-body-sm text-body-sm text-outline leading-relaxed">{s.desc}</p>
               </div>
 
-              <div className="pt-space-md flex items-center gap-1 font-label-md text-label-md text-tertiary-fixed-dim uppercase tracking-wider group-hover:text-primary">
-                <Link href="#contact" className="inline-flex items-center gap-1">
-                  {s.action} <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              <div className="pt-space-md mt-space-sm border-t border-[#1a2d22]">
+                <Link
+                  href="#contact"
+                  className="font-label-sm text-label-sm text-tertiary-fixed-dim group-hover:text-primary uppercase tracking-[0.18em] font-semibold inline-flex items-center gap-1.5 transition-colors"
+                >
+                  <span>{s.action}</span>
+                  <span className="material-symbols-outlined text-sm transform group-hover:translate-x-1 transition-transform">
+                    arrow_forward
+                  </span>
                 </Link>
               </div>
             </div>
