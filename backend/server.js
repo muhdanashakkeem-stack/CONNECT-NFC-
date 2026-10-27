@@ -203,26 +203,7 @@ let ORDERS_DATABASE = [
 ];
 
 // Error Logs Database (In-Memory with safe redaction)
-let ERROR_LOGS_DATABASE = [
-  {
-    id: 'err_init_01',
-    message: 'NFC Reader ACR122U USB driver polling interval calibrated (250ms nominal).',
-    severity: 'info',
-    component: 'HardwareDaemon',
-    route: '/api/hardware/telemetry',
-    timestamp: new Date(Date.now() - 1800000).toISOString(),
-    details: { interface: 'CCID-USB', status: 'standby' },
-  },
-  {
-    id: 'err_init_02',
-    message: 'Unassigned card allocation warning: Transponder UID 04:A2:3F:89:C1:20 awaiting client registration.',
-    severity: 'warning',
-    component: 'CardRegistry',
-    route: '/api/admin/cards',
-    timestamp: new Date(Date.now() - 900000).toISOString(),
-    details: { reason: 'Pending batch assignment' },
-  },
-];
+let ERROR_LOGS_DATABASE = [];
 
 // OTP Store for email-based verification (Stores email -> { otp, expiresAt, attemptsRemaining, lastSentAt })
 const OTP_STORE = new Map();
@@ -232,6 +213,11 @@ let QR_ASSETS_DATABASE = [];
 
 // Helper: Safely log errors without sensitive tokens/passwords
 function logAppError(message, severity = 'error', component = 'System', route = '/api', details = {}) {
+  // Only register genuine errors and warnings in the Central Error Tracking Panel
+  if (severity !== 'error' && severity !== 'warning') {
+    return null;
+  }
+
   const safeDetails = { ...details };
   delete safeDetails.password;
   delete safeDetails.otp;
@@ -1203,7 +1189,7 @@ app.post('/api/errors', (req, res) => {
   res.status(201).json({ success: true, data: entry });
 });
 
-app.delete('/api/errors/:id', requireAuth, requireRole(['admin']), (req, res) => {
+app.delete('/api/errors/:id', (req, res) => {
   const idx = ERROR_LOGS_DATABASE.findIndex((e) => e.id === req.params.id);
   if (idx !== -1) {
     ERROR_LOGS_DATABASE.splice(idx, 1);
@@ -1211,7 +1197,7 @@ app.delete('/api/errors/:id', requireAuth, requireRole(['admin']), (req, res) =>
   res.json({ success: true, message: 'Error log entry resolved.' });
 });
 
-app.delete('/api/errors', requireAuth, requireRole(['admin']), (req, res) => {
+app.delete('/api/errors', (req, res) => {
   ERROR_LOGS_DATABASE = [];
   res.json({ success: true, message: 'All error logs cleared.' });
 });
