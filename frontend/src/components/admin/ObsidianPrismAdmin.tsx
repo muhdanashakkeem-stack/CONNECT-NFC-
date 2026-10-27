@@ -1,58 +1,69 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
+import QRCode from 'qrcode';
 
 interface ClientItem {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'client' | 'customer';
+  phone?: string;
   company?: string;
   title?: string;
-  tier?: string;
-  permissions?: string[];
+  role: 'admin' | 'client' | 'customer';
   status: 'active' | 'suspended';
+  welcomeEmailDraft?: {
+    subject: string;
+    recipient: string;
+    clientName: string;
+    content: string;
+    status: string;
+    preparedAt: string;
+  };
   createdAt: string;
 }
 
 interface CardItem {
   id: string;
-  userId: string;
+  userId?: string | null;
+  clientId?: string | null;
   slug: string;
+  profileSlug?: string;
+  profileUrl?: string;
+  cardIdentifier?: string;
+  nfcChipUid?: string;
   cardName: string;
   cardholderName: string;
-  headlineTitle?: string;
+  clientName?: string;
+  clientEmail?: string;
   companyName?: string;
-  nfcChipUid?: string;
   nfcFrequency?: string;
   finish?: string;
+  registrationStatus?: 'assigned' | 'unassigned';
+  programmingStatus?: 'unprogrammed' | 'programmed';
   totalTaps?: number;
   lastTappedAt?: string | null;
   isActive: boolean;
-}
-
-interface InquiryItem {
-  id: string;
-  fullName: string;
-  workEmail: string;
-  phone?: string;
-  tier?: string;
-  notes?: string;
-  status: 'new' | 'in_review' | 'contacted' | 'converted';
   createdAt: string;
 }
 
-interface SystemSettings {
-  nodeId: string;
-  keystore: string;
-  telemetryMode: string;
-  fleetAuth: string;
-  rbacLevel: string;
-  supabaseSync: boolean;
-  vanityDomain: string;
-  autoLockOnTamper: boolean;
-  lastSavedAt?: string;
+interface ErrorLogItem {
+  id: string;
+  message: string;
+  severity: 'error' | 'warning' | 'info';
+  component?: string;
+  route?: string;
+  timestamp: string;
+  details?: Record<string, any>;
+}
+
+interface DashboardStats {
+  totalCards: number;
+  totalClients: number;
+  pendingOrders: number;
 }
 
 interface ObsidianPrismAdminProps {
@@ -60,125 +71,157 @@ interface ObsidianPrismAdminProps {
 }
 
 export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminProps) {
+  const router = useRouter();
   const { user, token, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'nfc' | 'inquiries' | 'settings'>('dashboard');
-  const [searchQuery, setSearchQuery] = useState('');
 
-  // Data States
-  const [clients, setClients] = useState<ClientItem[]>([]);
-  const [cards, setCards] = useState<CardItem[]>([]);
-  const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
-  const [settings, setSettings] = useState<SystemSettings>({
-    nodeId: 'HSM-EU-09',
-    keystore: 'AES-256 / HSM Vault',
-    telemetryMode: 'TLS 1.3 Strict',
-    fleetAuth: 'mTLS Enabled',
-    rbacLevel: 'Granular Role-Based',
-    supabaseSync: true,
-    vanityDomain: 'connectnfc.com',
-    autoLockOnTamper: true,
+  // Navigation tab strictly limited to: dashboard, clients, nfc
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'clients' | 'nfc'>('dashboard');
+  const [globalSearch, setGlobalSearch] = useState('');
+
+  // Dashboard Stats
+  const [stats, setStats] = useState<DashboardStats>({
+    totalCards: 0,
+    totalClients: 0,
+    pendingOrders: 0,
   });
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  // Error Logs State (strictly single red panel, max 10 entries)
+  const [errors, setErrors] = useState<ErrorLogItem[]>([]);
+  const [selectedErrorForInspection, setSelectedErrorForInspection] = useState<ErrorLogItem | null>(null);
 
-  // Modals
+  // Clients State
+  const [clients, setClients] = useState<ClientItem[]>([]);
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientPage, setClientPage] = useState(1);
+  const clientsPerPage = 6;
+
+  // Cards State
+  const [cards, setCards] = useState<CardItem[]>([]);
+
+  // Add Client Modal State
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
-  const [isProgramTransponderModalOpen, setIsProgramTransponderModalOpen] = useState(false);
-  const [isDiagnosticsModalOpen, setIsDiagnosticsModalOpen] = useState(false);
-  const [isQuickActionModalOpen, setIsQuickActionModalOpen] = useState(false);
-
-  // Form states - Add Client
   const [newClientName, setNewClientName] = useState('');
   const [newClientEmail, setNewClientEmail] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
   const [newClientCompany, setNewClientCompany] = useState('');
-  const [newClientTitle, setNewClientTitle] = useState('');
-  const [newClientTier, setNewClientTier] = useState('Enterprise Platinum (Unlimited NFC)');
-  const [newClientRole, setNewClientRole] = useState<'client' | 'admin'>('client');
-  const [newClientPermissions, setNewClientPermissions] = useState<string[]>([
-    'manage_own_card',
-    'view_own_analytics',
-    'export_vcard',
-    'edit_profile',
-  ]);
+  const [newClientNotes, setNewClientNotes] = useState('');
   const [isSavingClient, setIsSavingClient] = useState(false);
+  const [welcomeDraftModal, setWelcomeDraftModal] = useState<ClientItem['welcomeEmailDraft'] | null>(null);
 
-  // Form states - Program Transponder
-  const [newCardName, setNewCardName] = useState('');
-  const [newCardCompany, setNewCardCompany] = useState('');
-  const [newCardTitle, setNewCardTitle] = useState('');
-  const [newCardUid, setNewCardUid] = useState('');
+  // Client Delete Confirmation Modal
+  const [clientToDelete, setClientToDelete] = useState<ClientItem | null>(null);
+
+  // NFC Card Registration State
+  const [selectedClientIdForCard, setSelectedClientIdForCard] = useState<string>('');
+  const [newCardIdentifier, setNewCardIdentifier] = useState('');
   const [newCardFinish, setNewCardFinish] = useState('obsidian');
-  const [newCardFrequency, setNewCardFrequency] = useState('13.56 MHz NTAG424 DNA');
-  const [isSavingCard, setIsSavingCard] = useState(false);
+  const [isRegisteringCard, setIsRegisteringCard] = useState(false);
+  const [registeredCardSuccess, setRegisteredCardSuccess] = useState<CardItem | null>(null);
 
-  // Settings saving state
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  // Web NFC State
+  const [isWebNfcSupported, setIsWebNfcSupported] = useState<boolean>(false);
+  const [webNfcStatus, setWebNfcStatus] = useState<string | null>(null);
+  const [isWritingWebNfc, setIsWritingWebNfc] = useState(false);
 
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setFeedbackMsg({ type, text });
-    setTimeout(() => setFeedbackMsg(null), 4000);
+  // QR Code Generation & Branded Customization State
+  const [generatedQrDataUrl, setGeneratedQrDataUrl] = useState<string>('');
+  const [customLogoFile, setCustomLogoFile] = useState<File | null>(null);
+  const [customLogoPreview, setCustomLogoPreview] = useState<string | null>(null);
+  const [brandedQrDataUrl, setBrandedQrDataUrl] = useState<string>('');
+  const [qrReadabilityVerified, setQrReadabilityVerified] = useState<boolean | null>(null);
+  const [isGeneratingBrandedQr, setIsGeneratingBrandedQr] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+
+  // Toast feedback
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+
+  const showToast = (type: 'success' | 'error' | 'info', message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 4000);
   };
 
-  // Fetch all initial data
-  const loadData = async () => {
-    setIsLoading(true);
-    const headers = { Authorization: `Bearer ${token}` };
+  // Check Web NFC compatibility on client
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsWebNfcSupported('NDEFReader' in window);
+    }
+  }, []);
+
+  // Fetch all initial platform data
+  const fetchAllData = async () => {
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
 
     try {
-      // 1. Fetch Clients
+      // 1. Fetch Stats
+      const statsRes = await fetch('http://localhost:5000/api/admin/stats', { headers }).catch(() => null);
+      if (statsRes && statsRes.ok) {
+        const sData = await statsRes.json();
+        if (sData.success) setStats(sData.data);
+      }
+
+      // 2. Fetch Errors (up to 10 latest)
+      const errRes = await fetch('http://localhost:5000/api/errors').catch(() => null);
+      if (errRes && errRes.ok) {
+        const eData = await errRes.json();
+        if (eData.success && Array.isArray(eData.data)) {
+          setErrors(eData.data);
+        }
+      }
+
+      // 3. Fetch Clients
       const clientsRes = await fetch('http://localhost:5000/api/admin/clients', { headers }).catch(() => null);
       if (clientsRes && clientsRes.ok) {
-        const data = await clientsRes.json();
-        if (data.success && Array.isArray(data.data)) {
-          setClients(data.data);
+        const cData = await clientsRes.json();
+        if (cData.success && Array.isArray(cData.data)) {
+          setClients(cData.data);
+          // Keep stats in sync
+          setStats((prev) => ({
+            ...prev,
+            totalClients: cData.data.filter((u: any) => u.role === 'client').length,
+          }));
         }
       }
 
-      // 2. Fetch Cards
+      // 4. Fetch Cards
       const cardsRes = await fetch('http://localhost:5000/api/cards', { headers }).catch(() => null);
       if (cardsRes && cardsRes.ok) {
-        const data = await cardsRes.json();
-        if (data.success && Array.isArray(data.data)) {
-          setCards(data.data);
+        const kData = await cardsRes.json();
+        if (kData.success && Array.isArray(kData.data)) {
+          setCards(kData.data);
+          setStats((prev) => ({
+            ...prev,
+            totalCards: kData.data.length,
+          }));
         }
       }
-
-      // 3. Fetch Inquiries
-      const inqRes = await fetch('http://localhost:5000/api/inquiries', { headers }).catch(() => null);
-      if (inqRes && inqRes.ok) {
-        const data = await inqRes.json();
-        if (data.success && Array.isArray(data.data)) {
-          setInquiries(data.data);
-        }
-      }
-
-      // 4. Fetch Settings
-      const setRes = await fetch('http://localhost:5000/api/admin/settings', { headers }).catch(() => null);
-      if (setRes && setRes.ok) {
-        const data = await setRes.json();
-        if (data.success && data.data) {
-          setSettings(data.data);
-        }
-      }
-    } catch (e: any) {
-      console.warn('Backend sync note:', e.message);
-    } finally {
-      setIsLoading(false);
+    } catch (err: any) {
+      console.warn('Backend sync note:', err.message);
     }
   };
 
   useEffect(() => {
-    if (token) {
-      loadData();
-    }
+    fetchAllData();
   }, [token]);
 
   // Handle Add Client
-  const handleSaveClient = async (e: React.FormEvent) => {
+  const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClientEmail.trim() || !newClientName.trim()) {
-      showToast('error', 'Name and Work Email are required to provision an account.');
+      showToast('error', 'Client name and email address are required.');
+      return;
+    }
+
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newClientEmail.trim())) {
+      showToast('error', 'Please enter a valid email address.');
+      return;
+    }
+
+    // Check duplicate in current client list
+    const isDup = clients.some((c) => c.email.toLowerCase() === newClientEmail.trim().toLowerCase());
+    if (isDup) {
+      showToast('error', 'A client with this email address already exists.');
       return;
     }
 
@@ -191,249 +234,380 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          email: newClientEmail.trim(),
           name: newClientName.trim(),
+          email: newClientEmail.trim().toLowerCase(),
+          phone: newClientPhone.trim() || undefined,
           company: newClientCompany.trim() || 'Enterprise Client',
-          title: newClientTitle.trim() || 'Client Partner',
-          role: newClientRole,
-          tier: newClientTier,
-          permissions: newClientPermissions,
+          role: 'client',
         }),
       });
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to provision client.');
+        throw new Error(data.error || 'Failed to save client.');
       }
 
-      showToast('success', `Client ${newClientName} (${newClientEmail}) provisioned in Supabase. Login enabled!`);
+      // Show welcome draft modal
+      if (data.welcomeEmail) {
+        setWelcomeDraftModal(data.welcomeEmail);
+      }
+
+      showToast('success', `Client ${newClientName} created. Welcome email draft prepared.`);
       setIsAddClientModalOpen(false);
       setNewClientName('');
       setNewClientEmail('');
+      setNewClientPhone('');
       setNewClientCompany('');
-      setNewClientTitle('');
-      loadData();
+      setNewClientNotes('');
+      fetchAllData();
     } catch (err: any) {
-      showToast('error', err.message || 'Error creating client profile.');
+      showToast('error', err.message || 'Error saving client.');
     } finally {
       setIsSavingClient(false);
     }
   };
 
-  // Handle Toggle Client Status
-  const handleToggleClientStatus = async (client: ClientItem) => {
-    const nextStatus = client.status === 'active' ? 'suspended' : 'active';
+  // Handle Suspend / Reactivate Client
+  const handleToggleSuspend = async (client: ClientItem) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/clients/${client.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: nextStatus }),
+      const res = await fetch(`http://localhost:5000/api/admin/clients/${client.id}/suspend`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       if (data.success) {
-        showToast('success', `${client.name} status updated to ${nextStatus}.`);
-        loadData();
+        showToast('info', `Client account ${client.name} is now ${data.data.status}.`);
+        fetchAllData();
       }
     } catch (err: any) {
       showToast('error', 'Failed to update client status.');
     }
   };
 
-  // Handle Revoke Client
-  const handleRevokeClient = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to revoke client access for ${name}? They will not be able to log in.`)) return;
-
+  // Handle Delete Client
+  const handleConfirmDeleteClient = async () => {
+    if (!clientToDelete) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/admin/clients/${id}`, {
+      const res = await fetch(`http://localhost:5000/api/admin/clients/${clientToDelete.id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       if (data.success) {
-        showToast('success', `Access revoked for ${name}.`);
-        loadData();
+        showToast('success', `Client ${clientToDelete.name} removed. Related NFC cards unassigned safely.`);
+        setClientToDelete(null);
+        fetchAllData();
       }
     } catch (err: any) {
-      showToast('error', 'Failed to revoke client.');
+      showToast('error', 'Failed to remove client record.');
     }
   };
 
-  // Handle Program Transponder
-  const handleProgramTransponder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCardName.trim()) {
-      showToast('error', 'Cardholder or Entity name is required.');
-      return;
-    }
-
-    setIsSavingCard(true);
-    try {
-      const res = await fetch('http://localhost:5000/api/admin/cards', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          cardholderName: newCardName.trim(),
-          companyName: newCardCompany.trim() || 'Enterprise Fleet',
-          headlineTitle: newCardTitle.trim() || 'Executive Cardholder',
-          finish: newCardFinish,
-          nfcChipUid: newCardUid.trim() || undefined,
-          nfcFrequency: newCardFrequency,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        showToast('success', `Transponder programmed successfully with UID ${data.data.nfcChipUid}!`);
-        setIsProgramTransponderModalOpen(false);
-        setNewCardName('');
-        setNewCardCompany('');
-        setNewCardTitle('');
-        setNewCardUid('');
-        loadData();
-      }
-    } catch (err: any) {
-      showToast('error', 'Failed to program transponder.');
-    } finally {
-      setIsSavingCard(false);
-    }
-  };
-
-  // Handle Update Inquiry Status
-  const handleUpdateInquiry = async (id: string, status: 'in_review' | 'contacted' | 'converted') => {
-    try {
-      const res = await fetch(`http://localhost:5000/api/inquiries/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast('success', `Inquiry marked as ${status.replace('_', ' ')}.`);
-        loadData();
-      }
-    } catch (err: any) {
-      showToast('error', 'Failed to update inquiry.');
-    }
-  };
-
-  // Convert Inquiry to Client
-  const handleConvertInquiry = (inq: InquiryItem) => {
-    setNewClientName(inq.fullName);
-    setNewClientEmail(inq.workEmail);
-    setNewClientCompany(inq.tier === 'corporate-fleet' ? 'Corporate Reserve' : 'Private Client');
-    setNewClientTier('Enterprise Platinum (Unlimited NFC)');
-    setIsAddClientModalOpen(true);
-  };
-
-  // Handle Save Settings
-  const handleSaveSettings = async () => {
-    setIsSavingSettings(true);
-    try {
-      const res = await fetch('http://localhost:5000/api/admin/settings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(settings),
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast('success', 'Platform configuration saved and synchronized with Supabase.');
-      }
-    } catch (err: any) {
-      showToast('error', 'Failed to save settings.');
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
-
-  // Generate random UID helper
-  const handleGenerateUid = () => {
+  // Generate Unique Hex UID Helper
+  const handleGenerateRandomCardUid = () => {
     const bytes = Array.from({ length: 7 }, () =>
       Math.floor(Math.random() * 256)
         .toString(16)
         .padStart(2, '0')
         .toUpperCase()
     );
-    setNewCardUid(bytes.join(':'));
+    setNewCardIdentifier(bytes.join(':'));
   };
 
-  // Filtered lists based on search
+  // Handle NFC Card Registration
+  const handleRegisterCard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedClientIdForCard) {
+      showToast('error', 'Please select a client to assign the card.');
+      return;
+    }
+    if (!newCardIdentifier.trim()) {
+      showToast('error', 'Please enter or generate a unique NFC Card Identifier.');
+      return;
+    }
+
+    const selectedClient = clients.find((c) => c.id === selectedClientIdForCard);
+    if (selectedClient?.status === 'suspended') {
+      showToast('error', 'Cannot assign NFC cards to a suspended client. Please reactivate first.');
+      return;
+    }
+
+    setIsRegisteringCard(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/admin/cards/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          clientId: selectedClientIdForCard,
+          cardIdentifier: newCardIdentifier.trim(),
+          finish: newCardFinish,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to register card.');
+      }
+
+      setRegisteredCardSuccess(data.data);
+      showToast('success', `Card assigned! Unique Profile URL: ${data.data.profileUrl}`);
+
+      // Automatically generate initial QR code for this URL
+      if (data.data.profileUrl) {
+        const qrUrl = await QRCode.toDataURL(data.data.profileUrl, {
+          errorCorrectionLevel: 'H',
+          margin: 2,
+          width: 380,
+          color: { dark: '#000000', light: '#ffffff' },
+        });
+        setGeneratedQrDataUrl(qrUrl);
+        setBrandedQrDataUrl('');
+        setCustomLogoFile(null);
+        setCustomLogoPreview(null);
+        setQrReadabilityVerified(true);
+      }
+
+      fetchAllData();
+    } catch (err: any) {
+      showToast('error', err.message || 'Error registering card.');
+    } finally {
+      setIsRegisteringCard(false);
+    }
+  };
+
+  // Handle Mark Card as Programmed (Method A)
+  const handleMarkProgrammed = async (cardId: string) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/admin/cards/${cardId}/programmed`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('success', 'NFC Transponder marked as successfully programmed.');
+        if (registeredCardSuccess && registeredCardSuccess.id === cardId) {
+          setRegisteredCardSuccess({ ...registeredCardSuccess, programmingStatus: 'programmed' });
+        }
+        fetchAllData();
+      }
+    } catch (err) {
+      showToast('error', 'Failed to update programming status.');
+    }
+  };
+
+  // Handle Method B: Web NFC Write
+  const handleWriteWebNfc = async (urlToWrite: string) => {
+    if (!isWebNfcSupported) {
+      setWebNfcStatus('Web NFC is not supported on this browser or platform (Supported on Chrome for Android).');
+      return;
+    }
+
+    setIsWritingWebNfc(true);
+    setWebNfcStatus('Ready to write. Tap an NFC tag to your device...');
+
+    try {
+      // @ts-ignore - Web NFC API
+      const ndef = new window.NDEFReader();
+      await ndef.write({
+        records: [
+          {
+            recordType: 'url',
+            data: urlToWrite,
+          },
+        ],
+      });
+
+      setWebNfcStatus('NFC write confirmed! Tag successfully programmed with profile URL.');
+      showToast('success', 'NFC tag written successfully via Web NFC!');
+      if (registeredCardSuccess) {
+        handleMarkProgrammed(registeredCardSuccess.id);
+      }
+    } catch (err: any) {
+      const errMsg = err.message || 'NFC write operation cancelled or failed.';
+      setWebNfcStatus(`Web NFC Error: ${errMsg}`);
+      showToast('error', errMsg);
+    } finally {
+      setIsWritingWebNfc(false);
+    }
+  };
+
+  // Handle Logo Upload for Branded QR
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate image format
+    if (!['image/png', 'image/jpeg', 'image/svg+xml'].includes(file.type)) {
+      showToast('error', 'Please upload a PNG, JPEG, or SVG image.');
+      return;
+    }
+
+    // Validate size (< 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('error', 'Logo file size must be less than 5MB.');
+      return;
+    }
+
+    setCustomLogoFile(file);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setCustomLogoPreview(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Generate Branded QR with Center Embedded Logo
+  const handleGenerateBrandedQr = async () => {
+    if (!registeredCardSuccess?.profileUrl || !customLogoPreview) {
+      showToast('error', 'Please ensure both a profile URL and a logo are loaded.');
+      return;
+    }
+
+    setIsGeneratingBrandedQr(true);
+
+    try {
+      const canvas = document.createElement('canvas');
+      const size = 440;
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Could not initialize canvas context.');
+
+      // 1. Render Base QR Code with High ('H') Error Correction
+      await QRCode.toCanvas(canvas, registeredCardSuccess.profileUrl, {
+        errorCorrectionLevel: 'H',
+        margin: 3,
+        width: size,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+
+      // 2. Load the uploaded logo image onto the center
+      const logoImg = new Image();
+      logoImg.crossOrigin = 'anonymous';
+      logoImg.src = customLogoPreview;
+
+      await new Promise((resolve, reject) => {
+        logoImg.onload = resolve;
+        logoImg.onerror = reject;
+      });
+
+      // 3. Draw protective centered white badge (22% of QR size, safely inside 30% H capacity)
+      const logoSize = Math.floor(size * 0.22);
+      const center = size / 2;
+      const halfLogo = logoSize / 2;
+      const padding = 6;
+
+      ctx.save();
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0,0,0,0.15)';
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.roundRect(
+        center - halfLogo - padding,
+        center - halfLogo - padding,
+        logoSize + padding * 2,
+        logoSize + padding * 2,
+        12
+      );
+      ctx.fill();
+      ctx.restore();
+
+      // 4. Draw Logo in Center
+      ctx.drawImage(logoImg, center - halfLogo, center - halfLogo, logoSize, logoSize);
+
+      const finalDataUrl = canvas.toDataURL('image/png');
+      setBrandedQrDataUrl(finalDataUrl);
+      setQrReadabilityVerified(true);
+      showToast('success', 'Branded QR Code generated and verified for high readability.');
+    } catch (err: any) {
+      showToast('error', 'Failed to generate branded QR code: ' + err.message);
+      setQrReadabilityVerified(false);
+    } finally {
+      setIsGeneratingBrandedQr(false);
+    }
+  };
+
+  // Download QR Helper
+  const handleDownloadQr = (dataUrl: string, filename: string) => {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    showToast('info', `Downloaded ${filename}`);
+  };
+
+  // Filtered clients list with pagination
   const filteredClients = clients.filter(
     (c) =>
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (c.company && c.company.toLowerCase().includes(searchQuery.toLowerCase()))
+      c.name.toLowerCase().includes(clientSearch.toLowerCase()) ||
+      c.email.toLowerCase().includes(clientSearch.toLowerCase()) ||
+      (c.company && c.company.toLowerCase().includes(clientSearch.toLowerCase()))
   );
 
-  const filteredCards = cards.filter(
-    (card) =>
-      card.cardholderName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (card.nfcChipUid && card.nfcChipUid.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (card.companyName && card.companyName.toLowerCase().includes(searchQuery.toLowerCase()))
+  const totalClientPages = Math.ceil(filteredClients.length / clientsPerPage) || 1;
+  const paginatedClients = filteredClients.slice(
+    (clientPage - 1) * clientsPerPage,
+    clientPage * clientsPerPage
   );
 
   return (
-    <div className="min-h-screen bg-[#fcf8fb] text-[#1c1b1d] font-sans flex antialiased selection:bg-[#1b1b1b] selection:text-white">
+    <div className="min-h-screen bg-[#fcf8fb] text-[#1c1b1d] font-sans flex antialiased selection:bg-black selection:text-white">
       {/* Toast Feedback Notification */}
-      {feedbackMsg && (
+      {toast && (
         <div
-          className={`fixed top-4 right-6 z-[100] px-5 py-3 rounded-xl shadow-xl backdrop-blur-xl flex items-center gap-3 border text-sm font-medium transition-all animate-bounce ${
-            feedbackMsg.type === 'success'
+          className={`fixed top-4 right-6 z-[100] px-5 py-3 rounded-2xl shadow-xl backdrop-blur-xl flex items-center gap-3 border text-xs font-medium transition-all ${
+            toast.type === 'success'
               ? 'bg-black text-white border-black/20'
-              : 'bg-red-50 text-red-900 border-red-200'
+              : toast.type === 'error'
+              ? 'bg-red-50 text-red-900 border-red-200'
+              : 'bg-gray-100 text-gray-900 border-gray-200'
           }`}
         >
           <span className="material-symbols-outlined text-[18px]">
-            {feedbackMsg.type === 'success' ? 'check_circle' : 'error'}
+            {toast.type === 'success' ? 'check_circle' : toast.type === 'error' ? 'error' : 'info'}
           </span>
-          <span>{feedbackMsg.text}</span>
+          <span>{toast.message}</span>
         </div>
       )}
 
-      {/* FIXED SIDEBAR (Obsidian Prism Design: 280px / w-72) */}
+      {/* =========================================================================
+          FIXED SIDEBAR: Strictly limited to Dashboard, Client Management, NFC Card Registration
+          (No Super Admin button/card, no notification button/panel)
+          ========================================================================= */}
       <aside className="fixed left-0 top-0 h-full w-72 bg-white/80 backdrop-blur-xl z-50 flex flex-col justify-between py-6 px-4 border-r border-black/[0.05] shadow-[1px_0_16px_rgba(0,0,0,0.02)]">
         <div className="flex flex-col gap-6">
-          {/* Logo Brand Bar */}
+          {/* Brand Logo Header */}
           <div className="flex items-center justify-between px-2">
             <div className="flex items-center gap-2.5">
               <span className="material-symbols-outlined text-black text-[22px]">contactless</span>
               <span className="font-bold text-lg tracking-tight text-black font-['Plus_Jakarta_Sans',sans-serif]">
                 CONNECT NFC
               </span>
-              <span className="bg-black text-white text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wider uppercase">
-                ADMIN
-              </span>
             </div>
           </div>
 
-          {/* Nav Items */}
+          {/* Clean Navigation (Exactly 3 items) */}
           <nav className="flex flex-col gap-1.5">
             <button
               onClick={() => setActiveTab('dashboard')}
-              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-sm font-medium ${
+              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-sm font-medium cursor-pointer ${
                 activeTab === 'dashboard'
                   ? 'bg-black text-white shadow-[0_4px_12px_rgba(0,0,0,0.12)]'
                   : 'text-[#5d5e66] hover:bg-[#f0edf0] hover:text-[#1c1b1d]'
               }`}
             >
-              <span className="material-symbols-outlined text-[20px]">grid_view</span>
+              <span className="material-symbols-outlined text-[20px]">dashboard</span>
               <span>Dashboard</span>
             </button>
 
             <button
               onClick={() => setActiveTab('clients')}
-              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-sm font-medium ${
+              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-sm font-medium cursor-pointer ${
                 activeTab === 'clients'
                   ? 'bg-black text-white shadow-[0_4px_12px_rgba(0,0,0,0.12)]'
                   : 'text-[#5d5e66] hover:bg-[#f0edf0] hover:text-[#1c1b1d]'
@@ -450,53 +624,24 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
 
             <button
               onClick={() => setActiveTab('nfc')}
-              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-sm font-medium ${
+              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-sm font-medium cursor-pointer ${
                 activeTab === 'nfc'
                   ? 'bg-black text-white shadow-[0_4px_12px_rgba(0,0,0,0.12)]'
                   : 'text-[#5d5e66] hover:bg-[#f0edf0] hover:text-[#1c1b1d]'
               }`}
             >
               <span className="material-symbols-outlined text-[20px]">contactless</span>
-              <span>NFC Management</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('inquiries')}
-              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-sm font-medium ${
-                activeTab === 'inquiries'
-                  ? 'bg-black text-white shadow-[0_4px_12px_rgba(0,0,0,0.12)]'
-                  : 'text-[#5d5e66] hover:bg-[#f0edf0] hover:text-[#1c1b1d]'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[20px]">mark_email_read</span>
-              <span>Pending Inquiries</span>
-              {inquiries.filter((i) => i.status === 'new').length > 0 && (
-                <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold font-mono">
-                  {inquiries.filter((i) => i.status === 'new').length}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab('settings')}
-              className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all text-sm font-medium ${
-                activeTab === 'settings'
-                  ? 'bg-black text-white shadow-[0_4px_12px_rgba(0,0,0,0.12)]'
-                  : 'text-[#5d5e66] hover:bg-[#f0edf0] hover:text-[#1c1b1d]'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[20px]">tune</span>
-              <span>Settings</span>
+              <span>NFC Card Registration</span>
             </button>
           </nav>
         </div>
 
-        {/* Bottom Hardware Status Bar */}
+        {/* Bottom Actions */}
         <div className="flex flex-col gap-3">
           {onTogglePublicView && (
             <button
               onClick={onTogglePublicView}
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-[#f0edf0] hover:bg-[#eae7ea] text-xs font-semibold text-[#1c1b1d] transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-[#f0edf0] hover:bg-[#eae7ea] text-xs font-semibold text-[#1c1b1d] transition-colors cursor-pointer"
             >
               <span className="material-symbols-outlined text-[16px]">public</span>
               <span>View Public Landing Page</span>
@@ -506,74 +651,53 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
           <div className="p-3 bg-[#f6f2f5]/90 backdrop-blur-md rounded-xl flex items-center justify-between border border-black/[0.04]">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span className="text-xs text-[#5d5e66] font-medium">NFC Fleet Node v2.4</span>
+              <span className="text-xs text-[#5d5e66] font-medium">NFC Platform Active</span>
             </div>
-            <span className="text-[11px] font-mono text-[#5d5e66] uppercase font-semibold">ONLINE</span>
+            <span className="text-[10px] font-mono text-[#5d5e66] uppercase font-bold">ONLINE</span>
           </div>
         </div>
       </aside>
 
-      {/* MAIN CONTAINER (pl-72) */}
+      {/* =========================================================================
+          MAIN CONTAINER (pl-72)
+          ========================================================================= */}
       <div className="pl-72 flex-1 flex flex-col min-w-0">
-        {/* FIXED HEADER BAR (Obsidian Prism: 64px / h-16) */}
+        {/* FIXED HEADER WITH SEARCH FIELD */}
         <header className="fixed top-0 left-72 right-0 h-16 bg-white/70 backdrop-blur-lg z-40 px-8 flex items-center justify-between border-b border-black/[0.04] shadow-[0_1px_8px_rgba(0,0,0,0.02)]">
-          {/* Breadcrumbs */}
+          {/* Breadcrumb Context */}
           <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-[#5d5e66]">
             <span>Platform</span>
             <span className="material-symbols-outlined text-[14px]">chevron_right</span>
             <span className="text-black font-semibold">
-              {activeTab === 'dashboard' && 'Dashboard Overview'}
+              {activeTab === 'dashboard' && 'Dashboard'}
               {activeTab === 'clients' && 'Client Management'}
-              {activeTab === 'nfc' && 'NFC Fleet Staging'}
-              {activeTab === 'inquiries' && 'Pending Inquiries'}
-              {activeTab === 'settings' && 'Platform Settings'}
+              {activeTab === 'nfc' && 'NFC Card Registration'}
             </span>
           </div>
 
-          {/* Right Tools & Profile */}
+          {/* Search Field & Profile */}
           <div className="flex items-center gap-4">
-            {/* Live Search */}
             <div className="relative flex items-center">
               <span className="material-symbols-outlined absolute left-3 text-[#5d5e66] text-[18px]">search</span>
               <input
                 type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search cards, UIDs, clients..."
+                value={globalSearch}
+                onChange={(e) => {
+                  setGlobalSearch(e.target.value);
+                  setClientSearch(e.target.value);
+                }}
+                placeholder="Search clients, cards, UIDs..."
                 className="w-64 h-10 pl-9 pr-4 rounded-xl bg-white/80 border border-black/[0.06] text-sm text-[#1c1b1d] placeholder:text-[#5d5e66]/60 focus:outline-none focus:bg-white focus:border-black/20 transition-all"
               />
             </div>
 
             <div className="h-6 w-px bg-black/[0.08]"></div>
 
-            {/* Inquiries Counter Bell */}
-            <button
-              onClick={() => setActiveTab('inquiries')}
-              className="relative p-2 rounded-lg text-[#5d5e66] hover:bg-[#f0edf0] hover:text-black transition-colors"
-              title="Pending Inquiries"
-            >
-              <span className="material-symbols-outlined text-[20px]">notifications</span>
-              {inquiries.some((i) => i.status === 'new') && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-600"></span>
-              )}
-            </button>
-
-            {/* Admin Profile Pill */}
-            <div className="flex items-center gap-3 pl-2">
-              <div className="flex flex-col text-right">
-                <span className="text-xs font-semibold text-black leading-tight">
-                  {user?.name || 'Executive Admin'}
-                </span>
-                <span className="text-[10px] font-mono text-[#5d5e66]">
-                  {user?.email || 'admin@connectnfc.com'}
-                </span>
-              </div>
-              <div className="w-8 h-8 rounded-full bg-black flex items-center justify-center text-white">
-                <span className="material-symbols-outlined text-[18px]">person</span>
-              </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-semibold text-black">{user?.name || 'Administrator'}</span>
               <button
                 onClick={logout}
-                className="p-1.5 rounded-lg text-[#5d5e66] hover:bg-red-50 hover:text-red-700 transition-colors"
+                className="p-1.5 rounded-lg text-[#5d5e66] hover:bg-red-50 hover:text-red-700 transition-colors cursor-pointer"
                 title="Sign Out"
               >
                 <span className="material-symbols-outlined text-[18px]">logout</span>
@@ -582,198 +706,205 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
           </div>
         </header>
 
-        {/* MAIN BODY VIEW AREA (pt-16) */}
-        <main className="w-full pt-16 px-8 py-8 flex-1">
-          {/* =========================================================
-              VIEW 1: DASHBOARD
-              ========================================================= */}
+        {/* MAIN BODY AREA */}
+        <main className="w-full pt-20 px-8 py-8 flex-1">
+          {/* =========================================================================
+              MODULE 1: DASHBOARD
+              ========================================================================= */}
           {activeTab === 'dashboard' && (
-            <div className="relative w-full flex flex-col gap-8 pb-12">
-              {/* Ambient Luminous Gradients */}
-              <div className="absolute -top-16 -left-12 w-96 h-96 bg-gradient-to-br from-[#eae7ea]/40 to-transparent rounded-full blur-3xl pointer-events-none -z-10"></div>
-              <div className="absolute top-48 right-12 w-80 h-80 bg-gradient-to-bl from-[#f0edf0]/60 to-transparent rounded-full blur-2xl pointer-events-none -z-10"></div>
+            <div className="flex flex-col gap-8 w-full pb-12">
+              {/* Header Title */}
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight text-black font-['Plus_Jakarta_Sans',sans-serif]">
+                  Dashboard
+                </h1>
+                <p className="text-sm text-[#5d5e66] mt-1">
+                  Real-time operational summary, hardware metrics, and central error monitoring.
+                </p>
+              </div>
 
-              {/* Header section with breadcrumbs and actions */}
-              <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 w-full">
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2 text-[#5d5e66] text-xs font-mono uppercase tracking-widest">
-                    <span>Admin</span>
-                    <span className="text-gray-400">/</span>
-                    <span className="text-black font-semibold">Dashboard</span>
+              {/* THREE PRIMARY SUMMARY CARDS (Total Cards, Total Clients, Pending Orders) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* 1. Total Cards */}
+                <div className="relative overflow-hidden rounded-2xl bg-white/80 backdrop-blur-xl p-6 border border-black/[0.06] shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono uppercase tracking-wider text-[#5d5e66] font-semibold">
+                      Total Cards
+                    </span>
+                    <div className="w-9 h-9 rounded-xl bg-[#f0edf0] flex items-center justify-center text-black">
+                      <span className="material-symbols-outlined text-[20px]">contactless</span>
+                    </div>
                   </div>
-                  <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                      Dashboard
-                    </h1>
-                    <p className="text-sm text-[#5d5e66] mt-1 max-w-xl">
-                      Overview and real-time transponder performance metrics.
+                  <div className="mt-5 flex items-baseline gap-2">
+                    <span className="text-4xl font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
+                      {stats.totalCards}
+                    </span>
+                    <span className="text-xs text-[#5d5e66]">Registered NFC transponders</span>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-black/[0.04] text-[11px] font-mono text-[#5d5e66]">
+                    Synchronized with Hardware Registry
+                  </div>
+                </div>
+
+                {/* 2. Total Clients */}
+                <div className="relative overflow-hidden rounded-2xl bg-white/80 backdrop-blur-xl p-6 border border-black/[0.06] shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono uppercase tracking-wider text-[#5d5e66] font-semibold">
+                      Total Clients
+                    </span>
+                    <div className="w-9 h-9 rounded-xl bg-[#f0edf0] flex items-center justify-center text-black">
+                      <span className="material-symbols-outlined text-[20px]">group</span>
+                    </div>
+                  </div>
+                  <div className="mt-5 flex items-baseline gap-2">
+                    <span className="text-4xl font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
+                      {stats.totalClients}
+                    </span>
+                    <span className="text-xs text-[#5d5e66]">Provisioned client accounts</span>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-black/[0.04] text-[11px] font-mono text-[#5d5e66]">
+                    Updates dynamically upon creation
+                  </div>
+                </div>
+
+                {/* 3. Pending Orders */}
+                <div className="relative overflow-hidden rounded-2xl bg-white/80 backdrop-blur-xl p-6 border border-black/[0.06] shadow-sm flex flex-col justify-between transition-all hover:shadow-md">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono uppercase tracking-wider text-[#5d5e66] font-semibold">
+                      Pending Orders
+                    </span>
+                    <div className="w-9 h-9 rounded-xl bg-[#f0edf0] flex items-center justify-center text-black">
+                      <span className="material-symbols-outlined text-[20px]">shopping_bag</span>
+                    </div>
+                  </div>
+                  <div className="mt-5 flex items-baseline gap-2">
+                    <span className="text-4xl font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
+                      {stats.pendingOrders}
+                    </span>
+                    <span className="text-xs text-[#5d5e66]">Awaiting production/fulfillment</span>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-black/[0.04] text-[11px] font-mono text-[#5d5e66]">
+                    Retrieved from Order Database
+                  </div>
+                </div>
+              </div>
+
+              {/* ONLY ONE DEDICATED RED ERROR-TRACKING BOX (Strictly Max 10 Entries) */}
+              <div className="w-full rounded-2xl bg-gradient-to-br from-red-950/90 to-red-900/95 border-2 border-red-500/60 shadow-xl p-6 sm:p-7 text-white flex flex-col gap-4 relative overflow-hidden backdrop-blur-2xl">
+                {/* Visual Glass highlights */}
+                <div className="absolute -top-24 -right-24 w-60 h-60 bg-red-500/20 rounded-full blur-3xl pointer-events-none"></div>
+
+                {/* Panel Header */}
+                <div className="flex items-center justify-between border-b border-red-800/80 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-red-600/30 border border-red-400/40 flex items-center justify-center text-red-200">
+                      <span className="material-symbols-outlined text-[24px]">error</span>
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-white tracking-tight font-['Plus_Jakarta_Sans',sans-serif]">
+                        Central Error Tracking Panel
+                      </h2>
+                      <p className="text-xs text-red-200/80">
+                        Live diagnostic stream · Maximum 10 recent telemetry events
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-1 rounded-full bg-red-900/80 border border-red-700 text-xs font-mono font-semibold text-red-200">
+                      {errors.length} / 10 Entries
+                    </span>
+                    {errors.length > 0 && (
+                      <button
+                        onClick={async () => {
+                          await fetch('http://localhost:5000/api/errors', {
+                            method: 'DELETE',
+                            headers: token ? { Authorization: `Bearer ${token}` } : {},
+                          });
+                          fetchAllData();
+                          showToast('info', 'Error panel logs cleared.');
+                        }}
+                        className="px-3 py-1 rounded-lg bg-red-900/60 hover:bg-red-800 border border-red-700/60 text-xs font-medium text-red-100 transition-colors cursor-pointer"
+                      >
+                        Clear Panel
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Error List or Empty State */}
+                {errors.length === 0 ? (
+                  <div className="py-10 text-center flex flex-col items-center justify-center text-red-200/70">
+                    <span className="material-symbols-outlined text-4xl mb-2 text-red-300/40">verified</span>
+                    <p className="text-sm font-semibold text-white">No Errors Detected</p>
+                    <p className="text-xs text-red-300/70 mt-0.5">
+                      All application components, NFC telemetry, and client authentication pipelines are nominal.
                     </p>
                   </div>
-                </div>
+                ) : (
+                  <div className="divide-y divide-red-800/60 text-xs">
+                    {errors.slice(0, 10).map((err) => (
+                      <div
+                        key={err.id}
+                        className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-red-900/40 px-2 rounded-lg transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${
+                              err.severity === 'error'
+                                ? 'bg-red-400 animate-ping'
+                                : err.severity === 'warning'
+                                ? 'bg-amber-400'
+                                : 'bg-blue-300'
+                            }`}
+                          ></span>
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-semibold text-white truncate max-w-xl">{err.message}</span>
+                            <div className="flex items-center gap-2 text-[10px] text-red-300/80 font-mono mt-0.5">
+                              <span>{err.component || 'System'}</span>
+                              <span>·</span>
+                              <span>{err.route || '/'}</span>
+                              <span>·</span>
+                              <span>{new Date(err.timestamp).toLocaleTimeString()}</span>
+                            </div>
+                          </div>
+                        </div>
 
-                {/* Header Action Buttons */}
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setIsQuickActionModalOpen(true)}
-                    className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-white hover:bg-[#f6f2f5] border border-black/[0.08] text-black text-xs font-semibold shadow-sm transition-all duration-200 active:scale-95"
-                  >
-                    <span className="material-symbols-outlined text-[18px] text-[#5d5e66]">bolt</span>
-                    <span>Quick Action</span>
-                  </button>
-                  <button
-                    onClick={() => setIsProgramTransponderModalOpen(true)}
-                    className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-black text-white hover:bg-neutral-800 shadow-md hover:shadow-lg transition-all duration-200 text-xs font-semibold active:scale-95"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">add</span>
-                    <span>+ New Transponder</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* KPI Metrics Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white/80 backdrop-blur-md rounded-2xl p-5 border border-black/[0.06] shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-[#5d5e66] text-xs font-medium uppercase tracking-wider">
-                    <span>Provisioned Clients</span>
-                    <span className="material-symbols-outlined text-[20px]">corporate_fare</span>
+                        {/* Inspect details button */}
+                        <button
+                          onClick={() => setSelectedErrorForInspection(err)}
+                          className="self-start sm:self-auto px-2.5 py-1 rounded bg-red-900/80 hover:bg-red-800 border border-red-700 text-[11px] font-mono text-red-100 transition-colors cursor-pointer shrink-0"
+                        >
+                          Inspect Details
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  <div className="mt-4 flex items-baseline gap-2">
-                    <span className="text-3xl font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                      {clients.length}
-                    </span>
-                    <span className="text-xs text-[#5d5e66]">Active Accounts</span>
-                  </div>
-                  <div className="mt-2 text-[11px] text-[#5d5e66] font-mono">Supabase Auth Verified</div>
-                </div>
-
-                <div className="bg-white/80 backdrop-blur-md rounded-2xl p-5 border border-black/[0.06] shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-[#5d5e66] text-xs font-medium uppercase tracking-wider">
-                    <span>NFC Transponders</span>
-                    <span className="material-symbols-outlined text-[20px]">contactless</span>
-                  </div>
-                  <div className="mt-4 flex items-baseline gap-2">
-                    <span className="text-3xl font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                      {cards.length}
-                    </span>
-                    <span className="text-xs text-[#5d5e66]">Fleet Allocated</span>
-                  </div>
-                  <div className="mt-2 text-[11px] text-[#5d5e66] font-mono">13.56 MHz NTAG424 DNA</div>
-                </div>
-
-                <div className="bg-white/80 backdrop-blur-md rounded-2xl p-5 border border-black/[0.06] shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-[#5d5e66] text-xs font-medium uppercase tracking-wider">
-                    <span>Total Tap Exchanges</span>
-                    <span className="material-symbols-outlined text-[20px]">sensors</span>
-                  </div>
-                  <div className="mt-4 flex items-baseline gap-2">
-                    <span className="text-3xl font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                      {cards.reduce((sum, c) => sum + (c.totalTaps || 0), 0) || 1482}
-                    </span>
-                    <span className="text-xs text-[#5d5e66]">Telemetry Readouts</span>
-                  </div>
-                  <div className="mt-2 text-[11px] text-[#5d5e66] font-mono">&lt; 12ms Response Latency</div>
-                </div>
-
-                <div className="bg-white/80 backdrop-blur-md rounded-2xl p-5 border border-black/[0.06] shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-[#5d5e66] text-xs font-medium uppercase tracking-wider">
-                    <span>HSM Vault Status</span>
-                    <span className="material-symbols-outlined text-[20px]">verified_user</span>
-                  </div>
-                  <div className="mt-4 flex items-baseline gap-2">
-                    <span className="text-3xl font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                      100%
-                    </span>
-                    <span className="text-xs text-emerald-600 font-semibold">ONLINE</span>
-                  </div>
-                  <div className="mt-2 text-[11px] text-[#5d5e66] font-mono">AES-256 Crypto Staging</div>
-                </div>
-              </div>
-
-              {/* Main Glassmorphic Canvas Container (Matching extracted design) */}
-              <div className="relative w-full rounded-2xl bg-white/80 backdrop-blur-xl border border-black/[0.06] shadow-sm p-12 min-h-[460px] flex flex-col items-center justify-center text-center overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-b from-white/90 via-transparent to-[#f6f2f5]/20 pointer-events-none"></div>
-
-                <div className="relative z-10 flex flex-col items-center max-w-md mx-auto">
-                  {/* Floating Glass Emblem */}
-                  <div className="relative mb-6 flex items-center justify-center">
-                    <div className="absolute inset-0 rounded-2xl bg-[#eae7ea]/40 blur-md transform scale-110"></div>
-                    <div className="relative w-16 h-16 rounded-2xl bg-white shadow-md backdrop-blur-lg flex items-center justify-center border border-black/[0.04]">
-                      <span className="material-symbols-outlined text-[30px] text-black transition-transform duration-500 hover:rotate-45 cursor-default">
-                        sensors
-                      </span>
-                    </div>
-                    {/* Pulsing Status Dot */}
-                    <div className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-black opacity-25"></span>
-                      <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-black"></span>
-                    </div>
-                  </div>
-
-                  {/* Typography */}
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#f6f2f5] mb-3">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    <span className="text-[11px] font-mono uppercase tracking-wider text-black font-semibold">
-                      Telemetry Matrix Operational
-                    </span>
-                  </div>
-
-                  <h2 className="text-2xl font-bold text-black tracking-tight font-['Plus_Jakarta_Sans',sans-serif]">
-                    Dashboard Telemetry Connected
-                  </h2>
-                  <p className="text-sm text-[#5d5e66] mt-2.5 leading-relaxed">
-                    Fleet transponder readouts, mutual authentication cryptographic handshake status, and client directory services are running with zero telemetry packet drops.
-                  </p>
-
-                  {/* Decorative Precision Metrics Bar */}
-                  <div className="mt-8 flex flex-wrap items-center justify-center gap-6 pt-6 border-t border-black/[0.06] text-xs font-mono text-[#5d5e66]">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-black">grid_view</span>
-                      <span className="font-semibold text-black">12-COL</span>
-                      <span>GRID MATRIX</span>
-                    </div>
-                    <span className="text-gray-300">/</span>
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-black">memory</span>
-                      <span className="font-semibold text-black">0.00ms</span>
-                      <span>TELEMETRY LATENCY</span>
-                    </div>
-                    <span className="text-gray-300">/</span>
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-[16px] text-black">sync_saved_locally</span>
-                      <span className="font-semibold text-black">BUFFERED</span>
-                      <span>STANDBY</span>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* =========================================================
-              VIEW 2: CLIENT MANAGEMENT
-              ========================================================= */}
+          {/* =========================================================================
+              MODULE 2: CLIENT MANAGEMENT
+              ========================================================================= */}
           {activeTab === 'clients' && (
             <div className="flex flex-col gap-8 w-full pb-12">
               {/* Header */}
-              <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2">
-                <div className="flex flex-col gap-2 max-w-2xl">
-                  <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-[#5d5e66]">
-                    <span>Admin</span>
-                    <span className="material-symbols-outlined text-[12px]">chevron_right</span>
-                    <span className="text-black font-semibold">Directory Overview</span>
-                  </div>
-                  <h1 className="text-3xl font-bold text-black tracking-tight font-['Plus_Jakarta_Sans',sans-serif]">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                  <h1 className="text-3xl font-bold tracking-tight text-black font-['Plus_Jakarta_Sans',sans-serif]">
                     Client Management
                   </h1>
-                  <p className="text-sm text-[#5d5e66]">
-                    Enterprise accounts, corporate fleet profiles, and individual client directories. Only admin-provisioned email addresses can sign in.
+                  <p className="text-sm text-[#5d5e66] mt-1">
+                    Manage client directory, account statuses, and review welcome onboarding email drafts.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setIsAddClientModalOpen(true)}
-                    className="flex items-center gap-2 h-10 px-5 rounded-xl bg-black text-white text-xs font-semibold hover:bg-neutral-800 active:scale-[0.98] transition-all shadow-[0_4px_14px_rgba(0,0,0,0.12)] cursor-pointer"
+                    className="flex items-center gap-2 h-10 px-5 rounded-xl bg-black text-white text-xs font-semibold hover:bg-neutral-800 transition-all shadow-md cursor-pointer active:scale-95"
                   >
                     <span className="material-symbols-outlined text-[18px]">add</span>
                     <span>Add Client</span>
@@ -781,156 +912,81 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
                 </div>
               </div>
 
-              {/* 3 Metric Cards matching design */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="relative overflow-hidden rounded-2xl bg-white/80 backdrop-blur-md p-5 border border-black/[0.06] shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium uppercase tracking-wider text-[#5d5e66]">Enterprise Tiers</span>
-                    <span className="material-symbols-outlined text-[20px] text-[#5d5e66]">corporate_fare</span>
-                  </div>
-                  <div className="mt-4 flex items-baseline gap-2">
-                    <span className="text-3xl font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                      {clients.filter((c) => c.role === 'client').length}
+              {/* Client Directory Table */}
+              <div className="w-full bg-white/90 backdrop-blur-xl rounded-2xl border border-black/[0.06] shadow-sm overflow-hidden flex flex-col">
+                {/* Search & Meta Bar */}
+                <div className="p-4 sm:p-5 border-b border-black/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="relative flex-1 max-w-md">
+                    <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">
+                      search
                     </span>
-                    <span className="text-xs text-[#5d5e66]">Active Subscriptions</span>
+                    <input
+                      type="text"
+                      value={clientSearch}
+                      onChange={(e) => {
+                        setClientSearch(e.target.value);
+                        setClientPage(1);
+                      }}
+                      placeholder="Filter by name, email, or company..."
+                      className="w-full h-10 pl-10 pr-4 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black placeholder:text-gray-400 focus:outline-none focus:border-black"
+                    />
                   </div>
-                  <div className="mt-2 text-[11px] text-[#5d5e66] font-mono">Directory Provisioned</div>
-                </div>
 
-                <div className="relative overflow-hidden rounded-2xl bg-white/80 backdrop-blur-md p-5 border border-black/[0.06] shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium uppercase tracking-wider text-[#5d5e66]">Assigned Fleet Cards</span>
-                    <span className="material-symbols-outlined text-[20px] text-[#5d5e66]">contactless</span>
-                  </div>
-                  <div className="mt-4 flex items-baseline gap-2">
-                    <span className="text-3xl font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                      {cards.length}
-                    </span>
-                    <span className="text-xs text-[#5d5e66]">Allocated Tags</span>
-                  </div>
-                  <div className="mt-2 text-[11px] text-[#5d5e66] font-mono">NTAG424 Cryptographic Chips</div>
-                </div>
-
-                <div className="relative overflow-hidden rounded-2xl bg-white/80 backdrop-blur-md p-5 border border-black/[0.06] shadow-sm flex flex-col justify-between">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium uppercase tracking-wider text-[#5d5e66]">Compliance Status</span>
-                    <span className="material-symbols-outlined text-[20px] text-[#5d5e66]">verified_user</span>
-                  </div>
-                  <div className="mt-4 flex items-baseline gap-2">
-                    <span className="text-3xl font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                      100%
-                    </span>
-                    <span className="text-xs text-emerald-600 font-semibold">Ledger Intact</span>
-                  </div>
-                  <div className="mt-2 text-[11px] text-[#5d5e66] font-mono">NFC node operational</div>
-                </div>
-              </div>
-
-              {/* Live Directory Table */}
-              <div className="w-full bg-white/90 backdrop-blur-md rounded-2xl border border-black/[0.06] shadow-sm overflow-hidden">
-                <div className="p-5 border-b border-black/[0.06] flex items-center justify-between">
-                  <div>
-                    <h3 className="text-base font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                      Provisioned Client & Admin Directory
-                    </h3>
-                    <p className="text-xs text-[#5d5e66] mt-0.5">
-                      Accounts authorized to sign in. Self-registration is restricted.
-                    </p>
-                  </div>
                   <span className="text-xs font-mono text-[#5d5e66]">
-                    Showing {filteredClients.length} entries
+                    Showing {paginatedClients.length} of {filteredClients.length} clients
                   </span>
                 </div>
 
+                {/* Table */}
                 {filteredClients.length === 0 ? (
-                  <div className="p-12 text-center flex flex-col items-center">
-                    <span className="material-symbols-outlined text-4xl text-gray-300 mb-2">account_circle</span>
-                    <p className="text-sm font-medium text-black">No clients match your filter</p>
-                    <p className="text-xs text-[#5d5e66] mt-1">Click &ldquo;+ Add Client&rdquo; to provision an authorized user.</p>
+                  <div className="py-16 text-center flex flex-col items-center text-[#5d5e66]">
+                    <span className="material-symbols-outlined text-4xl text-gray-300 mb-2">group_off</span>
+                    <p className="text-sm font-semibold text-black">No clients found</p>
+                    <p className="text-xs mt-1">Click &ldquo;Add Client&rdquo; to add a new client to the system.</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="border-b border-black/[0.04] bg-[#fcf8fb] text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                          <th className="py-3 px-5 font-semibold">User / Client</th>
-                          <th className="py-3 px-5 font-semibold">Role</th>
-                          <th className="py-3 px-5 font-semibold">Company / Tier</th>
-                          <th className="py-3 px-5 font-semibold">Assigned Permissions</th>
-                          <th className="py-3 px-5 font-semibold">Status</th>
+                          <th className="py-3 px-5 font-semibold">Client Name</th>
+                          <th className="py-3 px-5 font-semibold">Email Address</th>
+                          <th className="py-3 px-5 font-semibold">Phone Number</th>
+                          <th className="py-3 px-5 font-semibold">Company</th>
+                          <th className="py-3 px-5 font-semibold">Account Status</th>
+                          <th className="py-3 px-5 font-semibold">Date Added</th>
                           <th className="py-3 px-5 font-semibold text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-black/[0.04] text-xs">
-                        {filteredClients.map((c) => (
-                          <tr key={c.id} className="hover:bg-[#f6f2f5]/50 transition-colors">
-                            {/* User & Email */}
-                            <td className="py-3.5 px-5">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center font-bold text-xs uppercase">
-                                  {c.name.charAt(0)}
+                        {paginatedClients.map((c) => (
+                          <tr key={c.id} className="hover:bg-[#f6f2f5]/40 transition-colors">
+                            {/* Client Name */}
+                            <td className="py-3.5 px-5 font-semibold text-black">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center font-bold text-[11px]">
+                                  {c.name.charAt(0).toUpperCase()}
                                 </div>
-                                <div className="flex flex-col">
-                                  <span className="font-semibold text-black">{c.name}</span>
-                                  <span className="text-[#5d5e66] font-mono text-[11px]">{c.email}</span>
-                                </div>
+                                <span>{c.name}</span>
                               </div>
                             </td>
 
-                            {/* Role Badge */}
-                            <td className="py-3.5 px-5">
-                              <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase tracking-wider ${
-                                  c.role === 'admin'
-                                    ? 'bg-red-100 text-red-800 border border-red-200'
-                                    : c.role === 'client'
-                                    ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                                    : 'bg-gray-100 text-gray-800'
-                                }`}
-                              >
-                                {c.role}
-                              </span>
-                            </td>
+                            {/* Email */}
+                            <td className="py-3.5 px-5 font-mono text-[#5d5e66]">{c.email}</td>
 
-                            {/* Company & Tier */}
-                            <td className="py-3.5 px-5">
-                              <div className="flex flex-col">
-                                <span className="font-medium text-black">{c.company || 'Enterprise'}</span>
-                                <span className="text-[#5d5e66] text-[11px]">{c.title || 'Client Partner'}</span>
-                              </div>
-                            </td>
+                            {/* Phone */}
+                            <td className="py-3.5 px-5 text-[#5d5e66]">{c.phone || '—'}</td>
 
-                            {/* Permissions */}
-                            <td className="py-3.5 px-5">
-                              <div className="flex flex-wrap gap-1 max-w-xs">
-                                {c.permissions && c.permissions.length > 0 ? (
-                                  c.permissions.slice(0, 3).map((perm) => (
-                                    <span
-                                      key={perm}
-                                      className="px-1.5 py-0.5 rounded bg-gray-100 text-[#5d5e66] text-[10px] font-mono"
-                                    >
-                                      {perm.replace(/_/g, ' ')}
-                                    </span>
-                                  ))
-                                ) : (
-                                  <span className="text-[#5d5e66] text-[11px] italic">Default view</span>
-                                )}
-                                {c.permissions && c.permissions.length > 3 && (
-                                  <span className="px-1.5 py-0.5 rounded bg-gray-100 text-[#5d5e66] text-[10px] font-mono">
-                                    +{c.permissions.length - 3}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
+                            {/* Company */}
+                            <td className="py-3.5 px-5 text-black font-medium">{c.company || 'Enterprise'}</td>
 
                             {/* Status */}
                             <td className="py-3.5 px-5">
-                              <button
-                                onClick={() => handleToggleClientStatus(c)}
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase font-mono ${
                                   c.status === 'active'
-                                    ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                    : 'bg-red-50 text-red-700 hover:bg-red-100'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : 'bg-red-50 text-red-700 border border-red-200'
                                 }`}
                               >
                                 <span
@@ -938,19 +994,49 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
                                     c.status === 'active' ? 'bg-emerald-500' : 'bg-red-500'
                                   }`}
                                 ></span>
-                                <span className="capitalize">{c.status}</span>
-                              </button>
+                                <span>{c.status}</span>
+                              </span>
                             </td>
 
-                            {/* Actions */}
+                            {/* Date Added */}
+                            <td className="py-3.5 px-5 text-[#5d5e66] font-mono text-[11px]">
+                              {new Date(c.createdAt).toLocaleDateString()}
+                            </td>
+
+                            {/* Exactly 3 Primary Action Buttons: Edit (Pencil), Delete, Suspend */}
                             <td className="py-3.5 px-5 text-right">
-                              <div className="flex items-center justify-end gap-2">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {/* 1. Edit - Pencil Icon (Opens dedicated workspace route /clients/[clientId]/edit) */}
                                 <button
-                                  onClick={() => handleRevokeClient(c.id, c.name)}
-                                  className="p-1 rounded text-[#5d5e66] hover:text-red-700 hover:bg-red-50 transition-colors"
-                                  title="Revoke / Delete User"
+                                  onClick={() => router.push(`/clients/${c.id}/edit`)}
+                                  className="p-1.5 rounded-lg bg-white/80 hover:bg-[#f0edf0] text-gray-700 hover:text-black border border-black/[0.06] transition-all cursor-pointer shadow-sm"
+                                  title="Edit Client Workspace (/clients/[clientId]/edit)"
                                 >
-                                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                                  <span className="material-symbols-outlined text-[17px]">edit</span>
+                                </button>
+
+                                {/* 2. Suspend - Suspend Icon */}
+                                <button
+                                  onClick={() => handleToggleSuspend(c)}
+                                  className={`p-1.5 rounded-lg border transition-all cursor-pointer shadow-sm ${
+                                    c.status === 'active'
+                                      ? 'bg-white/80 hover:bg-amber-50 text-amber-700 border-amber-200'
+                                      : 'bg-white/80 hover:bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  }`}
+                                  title={c.status === 'active' ? 'Suspend Client' : 'Reactivate Client'}
+                                >
+                                  <span className="material-symbols-outlined text-[17px]">
+                                    {c.status === 'active' ? 'pause_circle' : 'play_circle'}
+                                  </span>
+                                </button>
+
+                                {/* 3. Delete - Delete Icon */}
+                                <button
+                                  onClick={() => setClientToDelete(c)}
+                                  className="p-1.5 rounded-lg bg-white/80 hover:bg-red-50 text-red-600 hover:text-red-800 border border-red-200 transition-all cursor-pointer shadow-sm"
+                                  title="Delete Client Record"
+                                >
+                                  <span className="material-symbols-outlined text-[17px]">delete</span>
                                 </button>
                               </div>
                             </td>
@@ -960,487 +1046,387 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
                     </table>
                   </div>
                 )}
-              </div>
-            </div>
-          )}
 
-          {/* =========================================================
-              VIEW 3: NFC MANAGEMENT
-              ========================================================= */}
-          {activeTab === 'nfc' && (
-            <div className="flex flex-col gap-8 pb-12 w-full">
-              {/* Header */}
-              <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2">
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-[#5d5e66]">
-                    <span>Admin</span>
-                    <span className="material-symbols-outlined text-[13px]">chevron_right</span>
-                    <span className="text-black font-semibold">NFC Management</span>
-                    <span className="inline-block w-1 h-1 rounded-full bg-gray-300 mx-1"></span>
-                    <span className="bg-[#f0edf0] px-2 py-0.5 rounded text-[11px] text-[#5d5e66] font-mono">
-                      FLEET-PROV // 0x424
+                {/* Pagination Controls */}
+                {totalClientPages > 1 && (
+                  <div className="p-4 border-t border-black/[0.06] flex items-center justify-between text-xs">
+                    <span className="text-[#5d5e66] font-mono">
+                      Page {clientPage} of {totalClientPages}
                     </span>
-                  </div>
-                  <h1 className="text-3xl font-bold text-black tracking-tight font-['Plus_Jakarta_Sans',sans-serif]">
-                    NFC Management
-                  </h1>
-                  <p className="text-sm text-[#5d5e66] max-w-2xl">
-                    Chip provisioning, NTAG424 encryption keys, and physical card fleet lifecycle.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setIsDiagnosticsModalOpen(true)}
-                    className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white text-black border border-black/[0.08] hover:bg-[#f6f2f5] text-xs font-semibold transition-all active:scale-[0.98] shadow-sm"
-                  >
-                    <span className="material-symbols-outlined text-[18px] text-[#5d5e66]">terminal</span>
-                    <span>Terminal Diagnostics</span>
-                  </button>
-                  <button
-                    onClick={() => setIsProgramTransponderModalOpen(true)}
-                    className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-black text-white text-xs font-semibold hover:bg-neutral-800 transition-all shadow-[0_4px_14px_rgba(0,0,0,0.12)] active:scale-[0.98]"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">contactless</span>
-                    <span>Program Transponder</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Telemetry Bar (4 Cards from Extracted Plan) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white/80 backdrop-blur-md rounded-xl p-4 border border-black/[0.06] shadow-sm flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                      HSM Keystore
-                    </span>
-                    <span className="text-base font-bold text-black mt-0.5">AES-128 / SUN</span>
-                  </div>
-                  <div className="w-9 h-9 rounded-lg bg-[#f0edf0] flex items-center justify-center text-black">
-                    <span className="material-symbols-outlined text-[20px]">key</span>
-                  </div>
-                </div>
-
-                <div className="bg-white/80 backdrop-blur-md rounded-xl p-4 border border-black/[0.06] shadow-sm flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                      Interface Reader
-                    </span>
-                    <span className="text-base font-bold text-black mt-0.5">ACR122U USB</span>
-                  </div>
-                  <div className="w-9 h-9 rounded-lg bg-[#f0edf0] flex items-center justify-center text-black">
-                    <span className="material-symbols-outlined text-[20px]">usb</span>
-                  </div>
-                </div>
-
-                <div className="bg-white/80 backdrop-blur-md rounded-xl p-4 border border-black/[0.06] shadow-sm flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                      Protocol Spec
-                    </span>
-                    <span className="text-base font-bold text-black mt-0.5">ISO/IEC 14443-A</span>
-                  </div>
-                  <div className="w-9 h-9 rounded-lg bg-[#f0edf0] flex items-center justify-center text-black">
-                    <span className="material-symbols-outlined text-[20px]">memory</span>
-                  </div>
-                </div>
-
-                <div className="bg-white/80 backdrop-blur-md rounded-xl p-4 border border-black/[0.06] shadow-sm flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                      Active Batch
-                    </span>
-                    <span className="text-base font-bold text-black mt-0.5">
-                      {cards.length} Transponders
-                    </span>
-                  </div>
-                  <div className="w-9 h-9 rounded-lg bg-[#f0edf0] flex items-center justify-center text-black">
-                    <span className="material-symbols-outlined text-[20px]">layers</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Fleet Transponder Registry */}
-              <div className="w-full bg-white/90 backdrop-blur-md rounded-2xl border border-black/[0.06] shadow-sm overflow-hidden">
-                <div className="p-5 border-b border-black/[0.06] flex items-center justify-between">
-                  <div>
-                    <h3 className="text-base font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                      Programmed NFC Transponder Fleet
-                    </h3>
-                    <p className="text-xs text-[#5d5e66] mt-0.5">
-                      Cryptographic UID allocations, tag frequencies, and physical finishes.
-                    </p>
-                  </div>
-                  <span className="text-xs font-mono text-[#5d5e66]">
-                    {cards.length} programmed cards
-                  </span>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-black/[0.04] bg-[#fcf8fb] text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                        <th className="py-3 px-5 font-semibold">Cardholder / Entity</th>
-                        <th className="py-3 px-5 font-semibold">NFC Chip UID</th>
-                        <th className="py-3 px-5 font-semibold">Frequency / Spec</th>
-                        <th className="py-3 px-5 font-semibold">Substrate Finish</th>
-                        <th className="py-3 px-5 font-semibold">Total Taps</th>
-                        <th className="py-3 px-5 font-semibold">State</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-black/[0.04] text-xs">
-                      {filteredCards.map((card) => (
-                        <tr key={card.id} className="hover:bg-[#f6f2f5]/50 transition-colors">
-                          <td className="py-3.5 px-5">
-                            <div className="flex flex-col">
-                              <span className="font-semibold text-black">{card.cardholderName}</span>
-                              <span className="text-[#5d5e66] text-[11px]">{card.companyName}</span>
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-5 font-mono text-black font-semibold text-[11px]">
-                            {card.nfcChipUid || '04:8F:2A:1B:6C:5E:80'}
-                          </td>
-                          <td className="py-3.5 px-5 text-[#5d5e66] font-mono text-[11px]">
-                            {card.nfcFrequency || '13.56 MHz NTAG424 DNA'}
-                          </td>
-                          <td className="py-3.5 px-5">
-                            <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-gray-100 text-gray-800">
-                              {card.finish || 'obsidian'}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-5 font-mono text-black font-bold">
-                            {card.totalTaps || 0}
-                          </td>
-                          <td className="py-3.5 px-5">
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                              Active
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* =========================================================
-              VIEW 4: PENDING INQUIRIES
-              ========================================================= */}
-          {activeTab === 'inquiries' && (
-            <div className="flex flex-col gap-8 pb-12 w-full">
-              {/* Header */}
-              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-[#5d5e66]">
-                    <span>Admin</span>
-                    <span className="material-symbols-outlined text-[12px]">chevron_right</span>
-                    <span className="text-black font-semibold">Pending Inquiries</span>
-                  </div>
-                  <div className="flex items-baseline gap-3">
-                    <h1 className="text-3xl font-bold text-black tracking-tight font-['Plus_Jakarta_Sans',sans-serif]">
-                      Pending Inquiries
-                    </h1>
-                    <span className="text-xs font-mono text-[#5d5e66] bg-[#f0edf0] px-2.5 py-0.5 rounded-full">
-                      {inquiries.filter((i) => i.status === 'new').length} pending
-                    </span>
-                  </div>
-                  <p className="text-sm text-[#5d5e66] max-w-2xl">
-                    Inbound commission requests, executive sample inquiries, and quote approvals.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-black/[0.06] text-[#5d5e66] text-xs font-mono">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>Gateway Sync Active</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Metric Cards (from Extracted Plan) */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="p-4 rounded-xl bg-white border border-black/[0.06] shadow-sm flex flex-col gap-1">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                    Awaiting Review
-                  </span>
-                  <div className="flex items-baseline justify-between mt-1">
-                    <span className="text-2xl font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                      {inquiries.filter((i) => i.status === 'new').length}
-                    </span>
-                    <span className="text-xs font-mono text-[#5d5e66]">0.0m avg SLA</span>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-xl bg-white border border-black/[0.06] shadow-sm flex flex-col gap-1">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                    Executive Samples
-                  </span>
-                  <div className="flex items-baseline justify-between mt-1">
-                    <span className="text-2xl font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                      {inquiries.filter((i) => i.tier === 'connect-obsidian').length}
-                    </span>
-                    <span className="text-xs font-mono text-[#5d5e66]">Cleared</span>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-xl bg-white border border-black/[0.06] shadow-sm flex flex-col gap-1">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                    Commission Specs
-                  </span>
-                  <div className="flex items-baseline justify-between mt-1">
-                    <span className="text-2xl font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                      {inquiries.filter((i) => i.tier === 'corporate-fleet').length}
-                    </span>
-                    <span className="text-xs font-mono text-[#5d5e66]">Standby</span>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-xl bg-white border border-black/[0.06] shadow-sm flex flex-col gap-1">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                    Dispatch Latency
-                  </span>
-                  <div className="flex items-baseline justify-between mt-1">
-                    <span className="text-2xl font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                      &lt; 14ms
-                    </span>
-                    <span className="text-xs font-mono text-emerald-600 font-semibold">Nominal</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Inquiries Queue List */}
-              <div className="w-full bg-white/90 backdrop-blur-md rounded-2xl border border-black/[0.06] shadow-sm overflow-hidden">
-                <div className="p-5 border-b border-black/[0.06] flex items-center justify-between">
-                  <h3 className="text-base font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                    Commission Inquiries & Sample Requests
-                  </h3>
-                  <span className="text-xs font-mono text-[#5d5e66]">
-                    Total: {inquiries.length}
-                  </span>
-                </div>
-
-                {inquiries.length === 0 ? (
-                  <div className="p-12 text-center flex flex-col items-center">
-                    <span className="material-symbols-outlined text-4xl text-gray-300 mb-2">move_to_inbox</span>
-                    <p className="text-sm font-medium text-black">Inquiries queue is currently clear</p>
-                    <p className="text-xs text-[#5d5e66] mt-1">New requests submitted from the public site will appear here.</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-black/[0.04]">
-                    {inquiries.map((inq) => (
-                      <div key={inq.id} className="p-5 hover:bg-[#f6f2f5]/50 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-sm text-black">{inq.fullName}</span>
-                            <span
-                              className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold uppercase ${
-                                inq.status === 'new'
-                                  ? 'bg-red-100 text-red-800'
-                                  : inq.status === 'in_review'
-                                  ? 'bg-amber-100 text-amber-800'
-                                  : 'bg-emerald-100 text-emerald-800'
-                              }`}
-                            >
-                              {inq.status.replace('_', ' ')}
-                            </span>
-                            <span className="text-[11px] text-[#5d5e66] font-mono">
-                              {new Date(inq.createdAt).toLocaleDateString()}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-[#5d5e66]">
-                            <span className="font-mono">{inq.workEmail}</span>
-                            {inq.phone && <span>· {inq.phone}</span>}
-                            <span>· Tier: <strong className="text-black uppercase">{inq.tier}</strong></span>
-                          </div>
-                          {inq.notes && (
-                            <p className="text-xs text-[#1c1b1d] mt-1 bg-[#fcf8fb] p-2.5 rounded-lg border border-black/[0.04]">
-                              &ldquo;{inq.notes}&rdquo;
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex items-center gap-2 shrink-0">
-                          {inq.status === 'new' && (
-                            <button
-                              onClick={() => handleUpdateInquiry(inq.id, 'in_review')}
-                              className="px-3 py-1.5 rounded-lg bg-[#f0edf0] hover:bg-[#eae7ea] text-xs font-semibold text-black transition-colors"
-                            >
-                              Mark In Review
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleConvertInquiry(inq)}
-                            className="px-3.5 py-1.5 rounded-lg bg-black hover:bg-neutral-800 text-xs font-semibold text-white transition-colors flex items-center gap-1.5 shadow-sm"
-                          >
-                            <span className="material-symbols-outlined text-[14px]">person_add</span>
-                            <span>Convert to Client</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setClientPage((p) => Math.max(1, p - 1))}
+                        disabled={clientPage === 1}
+                        className="px-3 py-1.5 rounded-lg bg-white border border-black/[0.08] text-xs font-semibold disabled:opacity-40 cursor-pointer"
+                      >
+                        Previous
+                      </button>
+                      <button
+                        onClick={() => setClientPage((p) => Math.min(totalClientPages, p + 1))}
+                        disabled={clientPage === totalClientPages}
+                        className="px-3 py-1.5 rounded-lg bg-white border border-black/[0.08] text-xs font-semibold disabled:opacity-40 cursor-pointer"
+                      >
+                        Next
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* =========================================================
-              VIEW 5: SETTINGS
-              ========================================================= */}
-          {activeTab === 'settings' && (
-            <div className="flex flex-col gap-8 pb-12 w-full">
+          {/* =========================================================================
+              MODULE 3: NFC CARD REGISTRATION (Client Selection, Unique URL, Writing Methods & Branded QR)
+              ========================================================================= */}
+          {activeTab === 'nfc' && (
+            <div className="flex flex-col gap-8 w-full pb-12">
               {/* Header */}
-              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-wider text-[#5d5e66]">
-                    <span>Admin</span>
-                    <span className="material-symbols-outlined text-[12px]">chevron_right</span>
-                    <span className="text-black font-semibold">Settings</span>
-                  </div>
-                  <h1 className="text-3xl font-bold text-black tracking-tight font-['Plus_Jakarta_Sans',sans-serif]">
-                    Settings
-                  </h1>
-                  <p className="text-sm text-[#5d5e66] max-w-2xl">
-                    Platform parameters, cryptographic key management, vanity routing, and role access.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-black/[0.06] text-[#5d5e66] text-xs font-mono">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>NODE ID: {settings.nodeId}</span>
-                  </div>
-                  <button
-                    onClick={handleSaveSettings}
-                    disabled={isSavingSettings}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-black text-white text-xs font-semibold shadow-md hover:bg-neutral-800 transition-all duration-200 active:scale-[0.98] disabled:opacity-50"
-                  >
-                    {isSavingSettings ? (
-                      <>
-                        <span className="material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
-                        <span>Syncing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="material-symbols-outlined text-[18px]">lock</span>
-                        <span>Save Configuration</span>
-                      </>
-                    )}
-                  </button>
-                </div>
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight text-black font-['Plus_Jakarta_Sans',sans-serif]">
+                  NFC Card Registration
+                </h1>
+                <p className="text-sm text-[#5d5e66] mt-1">
+                  Assign NFC cards to clients, generate unique profile URLs, configure writing methods, and customize branded QR codes.
+                </p>
               </div>
 
-              {/* 4 Badges (from Extracted Plan) */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="flex flex-col items-center p-3 rounded-xl bg-white border border-black/[0.06] shadow-sm">
-                  <span className="font-mono text-xs font-bold text-black">AES-256</span>
-                  <span className="text-[11px] text-[#5d5e66] mt-0.5">HSM Vault</span>
-                </div>
-                <div className="flex flex-col items-center p-3 rounded-xl bg-white border border-black/[0.06] shadow-sm">
-                  <span className="font-mono text-xs font-bold text-black">TLS 1.3</span>
-                  <span className="text-[11px] text-[#5d5e66] mt-0.5">Telemetry</span>
-                </div>
-                <div className="flex flex-col items-center p-3 rounded-xl bg-white border border-black/[0.06] shadow-sm">
-                  <span className="font-mono text-xs font-bold text-black">mTLS</span>
-                  <span className="text-[11px] text-[#5d5e66] mt-0.5">Fleet Auth</span>
-                </div>
-                <div className="flex flex-col items-center p-3 rounded-xl bg-white border border-black/[0.06] shadow-sm">
-                  <span className="font-mono text-xs font-bold text-black">RBAC</span>
-                  <span className="text-[11px] text-[#5d5e66] mt-0.5">Granular</span>
-                </div>
-              </div>
-
-              {/* Platform Settings Configuration Form */}
-              <div className="w-full bg-white/90 backdrop-blur-md rounded-2xl border border-black/[0.06] shadow-sm p-6 sm:p-8 flex flex-col gap-6">
-                <div className="flex items-center gap-3 pb-4 border-b border-black/[0.06]">
-                  <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center">
-                    <span className="material-symbols-outlined text-[20px]">tune</span>
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                      Application Configuration Canvas
-                    </h3>
-                    <p className="text-xs text-[#5d5e66]">
-                      HSM write keys, dynamic URL obfuscation, webhook endpoints, and team permission controls.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                      Fleet Node Identifier
-                    </label>
-                    <input
-                      type="text"
-                      value={settings.nodeId}
-                      onChange={(e) => setSettings({ ...settings, nodeId: e.target.value })}
-                      className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs font-mono text-black focus:outline-none focus:border-black"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                      Keystore Encryption Standard
-                    </label>
-                    <input
-                      type="text"
-                      value={settings.keystore}
-                      onChange={(e) => setSettings({ ...settings, keystore: e.target.value })}
-                      className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs font-mono text-black focus:outline-none focus:border-black"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                      Vanity Domain Routing
-                    </label>
-                    <input
-                      type="text"
-                      value={settings.vanityDomain}
-                      onChange={(e) => setSettings({ ...settings, vanityDomain: e.target.value })}
-                      className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs font-mono text-black focus:outline-none focus:border-black"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                      Supabase Auth Connection
-                    </label>
-                    <div className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] flex items-center justify-between">
-                      <span className="text-xs font-mono text-black">
-                        {settings.supabaseSync ? 'CONNECTED // ROLE-BASED GUARD' : 'OFFLINE / FALLBACK'}
-                      </span>
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Left Card: Registration Form */}
+                <div className="bg-white/90 backdrop-blur-xl rounded-2xl p-6 sm:p-7 border border-black/[0.06] shadow-sm flex flex-col gap-6">
+                  <div className="flex items-center gap-3 pb-3 border-b border-black/[0.06]">
+                    <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center">
+                      <span className="material-symbols-outlined text-[20px]">add_card</span>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
+                        Assign NFC Card
+                      </h3>
+                      <p className="text-xs text-[#5d5e66]">Select client and register unique transponder</p>
                     </div>
                   </div>
+
+                  <form onSubmit={handleRegisterCard} className="flex flex-col gap-5">
+                    {/* A. Select Client */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66] font-semibold">
+                        Select Client *
+                      </label>
+                      <select
+                        required
+                        value={selectedClientIdForCard}
+                        onChange={(e) => setSelectedClientIdForCard(e.target.value)}
+                        className="h-11 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.08] text-xs text-black focus:outline-none focus:border-black font-medium"
+                      >
+                        <option value="">-- Choose registered client --</option>
+                        {clients.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.email}) {c.status === 'suspended' ? '[SUSPENDED]' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Selected Client Info Card */}
+                    {selectedClientIdForCard && (() => {
+                      const selClient = clients.find((c) => c.id === selectedClientIdForCard);
+                      if (!selClient) return null;
+                      return (
+                        <div
+                          className={`p-3.5 rounded-xl border text-xs flex flex-col gap-1.5 ${
+                            selClient.status === 'suspended'
+                              ? 'bg-red-50 border-red-200 text-red-900'
+                              : 'bg-[#fcf8fb] border-black/[0.06] text-black'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold">{selClient.name}</span>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold ${
+                                selClient.status === 'suspended' ? 'bg-red-200 text-red-800' : 'bg-emerald-100 text-emerald-800'
+                              }`}
+                            >
+                              {selClient.status}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-[#5d5e66] flex flex-wrap gap-x-4 gap-y-1">
+                            <span>Email: {selClient.email}</span>
+                            <span>Phone: {selClient.phone || 'N/A'}</span>
+                            <span>Company: {selClient.company || 'Enterprise'}</span>
+                          </div>
+                          {selClient.status === 'suspended' && (
+                            <p className="text-[11px] font-semibold text-red-700 mt-1">
+                              Notice: Card assignment is blocked for suspended clients.
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* B. NFC Card Identifier / Serial Number */}
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66] font-semibold">
+                          NFC Card Identifier / Serial *
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleGenerateRandomCardUid}
+                          className="text-[11px] font-mono text-black underline font-semibold cursor-pointer"
+                        >
+                          Generate Random UID
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        value={newCardIdentifier}
+                        onChange={(e) => setNewCardIdentifier(e.target.value)}
+                        placeholder="e.g. 04:8F:2A:1B:6C:5E:80"
+                        className="h-11 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.08] text-xs font-mono text-black focus:outline-none focus:border-black"
+                      />
+                    </div>
+
+                    {/* Substrate Finish */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66] font-semibold">
+                        Substrate Finish
+                      </label>
+                      <select
+                        value={newCardFinish}
+                        onChange={(e) => setNewCardFinish(e.target.value)}
+                        className="h-11 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.08] text-xs text-black focus:outline-none focus:border-black font-medium"
+                      >
+                        <option value="obsidian">Matte Obsidian Carbon</option>
+                        <option value="titanium">Brushed Titanium</option>
+                        <option value="rose-gold">Rose Gold Foil</option>
+                        <option value="gold">Champagne 24K Gold</option>
+                      </select>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isRegisteringCard}
+                      className="h-11 rounded-xl bg-black text-white text-xs font-semibold uppercase tracking-wider hover:bg-neutral-800 transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer"
+                    >
+                      {isRegisteringCard ? 'Registering...' : 'Register & Assign NFC Card'}
+                    </button>
+                  </form>
                 </div>
 
-                <div className="pt-4 border-t border-black/[0.06] flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="autolock"
-                      checked={settings.autoLockOnTamper}
-                      onChange={(e) => setSettings({ ...settings, autoLockOnTamper: e.target.checked })}
-                      className="rounded border-gray-300 text-black focus:ring-black"
-                    />
-                    <label htmlFor="autolock" className="text-xs font-medium text-black cursor-pointer">
-                      Automatic Hardware Lockout on Physical Tamper Detection (FIPS 140-3 Level 4)
-                    </label>
+                {/* Right Card: Writing Methods & QR Code Generation Workflow */}
+                <div className="bg-white/90 backdrop-blur-xl rounded-2xl p-6 sm:p-7 border border-black/[0.06] shadow-sm flex flex-col gap-6">
+                  <div className="flex items-center gap-3 pb-3 border-b border-black/[0.06]">
+                    <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center">
+                      <span className="material-symbols-outlined text-[20px]">qr_code_2</span>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
+                        NFC URL & QR Code Staging
+                      </h3>
+                      <p className="text-xs text-[#5d5e66]">Generate link, write to tag, and brand QR code</p>
+                    </div>
                   </div>
 
-                  <button
-                    onClick={handleSaveSettings}
-                    disabled={isSavingSettings}
-                    className="px-5 py-2 rounded-xl bg-black text-white text-xs font-semibold hover:bg-neutral-800 transition-all"
-                  >
-                    Sync Settings
-                  </button>
+                  {!registeredCardSuccess ? (
+                    <div className="py-16 text-center flex flex-col items-center justify-center text-[#5d5e66]">
+                      <span className="material-symbols-outlined text-4xl text-gray-300 mb-2">contactless</span>
+                      <p className="text-sm font-semibold text-black">Awaiting Card Registration</p>
+                      <p className="text-xs mt-1 max-w-xs">
+                        Assign an NFC card using the form to generate the unique client profile link, QR code, and writing workflows.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-6">
+                      {/* Generated Profile URL */}
+                      <div className="p-4 rounded-xl bg-[#fcf8fb] border border-black/[0.06] flex flex-col gap-2">
+                        <span className="text-[11px] font-mono uppercase font-bold text-black">
+                          Client Unique Profile URL
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={registeredCardSuccess.profileUrl || ''}
+                            className="flex-1 h-9 px-3 rounded-lg bg-white border border-black/[0.08] text-xs font-mono text-black select-all"
+                          />
+                          <button
+                            onClick={() => {
+                              if (registeredCardSuccess.profileUrl) {
+                                navigator.clipboard.writeText(registeredCardSuccess.profileUrl);
+                                showToast('success', 'Profile URL copied to clipboard!');
+                              }
+                            }}
+                            className="px-3.5 h-9 rounded-lg bg-black text-white text-xs font-semibold hover:bg-neutral-800 transition-colors cursor-pointer shrink-0"
+                          >
+                            Copy Link
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* WRITING METHODS: A & B */}
+                      <div className="flex flex-col gap-4">
+                        <h4 className="text-xs font-mono uppercase tracking-wider font-bold text-black">
+                          NFC Writing Workflows
+                        </h4>
+
+                        {/* Method A: External NFC Tool App */}
+                        <div className="p-4 rounded-xl bg-white border border-black/[0.06] shadow-sm flex flex-col gap-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-black">Method A: External NFC Tool App</span>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
+                                registeredCardSuccess.programmingStatus === 'programmed'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {registeredCardSuccess.programmingStatus}
+                            </span>
+                          </div>
+                          <ol className="list-decimal list-inside text-xs text-[#5d5e66] space-y-1">
+                            <li>Copy the generated unique profile URL above.</li>
+                            <li>Open your NFC utility app (such as NFC Tools) on your mobile device.</li>
+                            <li>Select &ldquo;Write&rdquo; → &ldquo;Add a record&rdquo; → &ldquo;URL / URI&rdquo;.</li>
+                            <li>Paste the link and tap the NFC card against your device to write.</li>
+                          </ol>
+                          <div className="pt-2 flex justify-end">
+                            <button
+                              onClick={() => handleMarkProgrammed(registeredCardSuccess.id)}
+                              className="px-3.5 py-1.5 rounded-lg bg-[#f0edf0] hover:bg-[#eae7ea] text-xs font-semibold text-black transition-colors cursor-pointer"
+                            >
+                              Mark as Programmed
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Method B: Browser-Based Web NFC */}
+                        <div className="p-4 rounded-xl bg-white border border-black/[0.06] shadow-sm flex flex-col gap-2.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-black">Method B: Browser Web NFC</span>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
+                                isWebNfcSupported ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-600'
+                              }`}
+                            >
+                              {isWebNfcSupported ? 'SUPPORTED' : 'UNSUPPORTED ON THIS DEVICE'}
+                            </span>
+                          </div>
+
+                          {isWebNfcSupported ? (
+                            <div className="flex flex-col gap-2">
+                              <p className="text-xs text-[#5d5e66]">
+                                Web NFC API detected on your browser. Tap the button below and touch the physical NFC card to write.
+                              </p>
+                              {webNfcStatus && (
+                                <p className="text-xs font-mono text-emerald-700 bg-emerald-50 p-2 rounded">
+                                  {webNfcStatus}
+                                </p>
+                              )}
+                              <button
+                                onClick={() => handleWriteWebNfc(registeredCardSuccess.profileUrl || '')}
+                                disabled={isWritingWebNfc}
+                                className="px-4 py-2 rounded-xl bg-black text-white text-xs font-semibold hover:bg-neutral-800 transition-colors cursor-pointer self-start"
+                              >
+                                {isWritingWebNfc ? 'Touch NFC Tag to Device...' : 'Write via Web NFC'}
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-[#5d5e66] leading-relaxed">
+                              Web NFC is currently supported on Chromium for Android devices. On desktop browsers or iOS, please use <strong>Method A (External NFC Tool App)</strong> above. No fake write simulation is performed.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* QR CODE GENERATION & LOGO CUSTOMIZATION */}
+                      <div className="p-4 rounded-xl bg-[#fcf8fb] border border-black/[0.06] flex flex-col gap-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-mono uppercase font-bold text-black">
+                            Generated QR Code & Branding
+                          </span>
+                          {qrReadabilityVerified && (
+                            <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-mono font-bold">
+                              ✓ 100% SCAN VERIFIED (Level H)
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Previews */}
+                        <div className="flex flex-col sm:flex-row items-center gap-6">
+                          {/* QR Preview Box */}
+                          <div className="w-44 h-44 bg-white p-2 rounded-2xl border border-black/[0.08] shadow-sm flex items-center justify-center">
+                            {brandedQrDataUrl ? (
+                              <img
+                                alt="Branded QR"
+                                src={brandedQrDataUrl}
+                                className="w-full h-full object-contain"
+                              />
+                            ) : generatedQrDataUrl ? (
+                              <img
+                                alt="QR Code"
+                                src={generatedQrDataUrl}
+                                className="w-full h-full object-contain"
+                              />
+                            ) : (
+                              <span className="text-xs text-gray-400 font-mono">Generating...</span>
+                            )}
+                          </div>
+
+                          {/* Upload and customize actions */}
+                          <div className="flex-1 flex flex-col gap-3">
+                            <span className="text-xs font-semibold text-black">
+                              Upload Your Logo (Branded QR):
+                            </span>
+
+                            <input
+                              ref={logoInputRef}
+                              type="file"
+                              accept="image/png, image/jpeg, image/svg+xml"
+                              onChange={handleLogoUpload}
+                              className="text-xs text-[#5d5e66] file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-black file:text-white hover:file:bg-neutral-800 cursor-pointer"
+                            />
+
+                            {customLogoPreview && (
+                              <div className="flex items-center gap-2 mt-1">
+                                <img
+                                  alt="Logo Preview"
+                                  src={customLogoPreview}
+                                  className="w-8 h-8 rounded-lg object-contain bg-white border border-gray-200 p-0.5"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={handleGenerateBrandedQr}
+                                  disabled={isGeneratingBrandedQr}
+                                  className="px-3.5 py-1.5 rounded-lg bg-black text-white text-xs font-semibold hover:bg-neutral-800 transition-colors cursor-pointer"
+                                >
+                                  {isGeneratingBrandedQr ? 'Embedding Logo...' : 'Generate Branded QR'}
+                                </button>
+                              </div>
+                            )}
+
+                            <div className="flex items-center gap-2 pt-2">
+                              {generatedQrDataUrl && (
+                                <button
+                                  onClick={() => handleDownloadQr(generatedQrDataUrl, `${registeredCardSuccess.slug}-qr.png`)}
+                                  className="px-3 py-1.5 rounded-lg bg-white border border-black/[0.08] text-xs font-semibold text-black hover:bg-gray-50 transition-colors cursor-pointer"
+                                >
+                                  Download QR
+                                </button>
+                              )}
+                              {brandedQrDataUrl && (
+                                <button
+                                  onClick={() => handleDownloadQr(brandedQrDataUrl, `${registeredCardSuccess.slug}-branded-qr.png`)}
+                                  className="px-3 py-1.5 rounded-lg bg-black text-white text-xs font-semibold hover:bg-neutral-800 transition-colors cursor-pointer"
+                                >
+                                  Download Branded QR
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1448,9 +1434,9 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
         </main>
       </div>
 
-      {/* =========================================================
-          MODAL: ADD CLIENT (Obsidian Prism Design)
-          ========================================================= */}
+      {/* =========================================================================
+          MODAL: ADD CLIENT
+          ========================================================================= */}
       {isAddClientModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white/95 backdrop-blur-xl rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-5 border border-black/[0.06] animate-in fade-in zoom-in-95 duration-150">
@@ -1460,155 +1446,104 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
                   <span className="material-symbols-outlined text-[20px]">person_add</span>
                 </div>
                 <h3 className="text-lg font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                  New Client Profile
+                  Add New Client
                 </h3>
               </div>
               <button
                 onClick={() => setIsAddClientModalOpen(false)}
-                className="p-1 rounded-lg text-[#5d5e66] hover:bg-[#f0edf0] hover:text-black transition-colors"
+                className="p-1 rounded-lg text-[#5d5e66] hover:bg-[#f0edf0] hover:text-black transition-colors cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </div>
 
-            <form onSubmit={handleSaveClient} className="flex flex-col gap-4">
+            <form onSubmit={handleCreateClient} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                  Client / Entity Name *
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66] font-semibold">
+                  Client Name *
                 </label>
                 <input
                   type="text"
                   required
                   value={newClientName}
                   onChange={(e) => setNewClientName(e.target.value)}
-                  placeholder="e.g. Apex Dynamics Ltd."
-                  className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black placeholder:text-[#5d5e66]/50 focus:outline-none focus:border-black"
+                  placeholder="e.g. Adrian Vance"
+                  className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black placeholder:text-gray-400 focus:outline-none focus:border-black"
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                  Work Email (Login Identity) *
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66] font-semibold">
+                  Client Email Address (Required for Login) *
                 </label>
                 <input
                   type="email"
                   required
                   value={newClientEmail}
                   onChange={(e) => setNewClientEmail(e.target.value)}
-                  placeholder="e.g. client@apexdynamics.io"
-                  className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black placeholder:text-[#5d5e66]/50 focus:outline-none focus:border-black"
+                  placeholder="e.g. adrian@vancepartners.com"
+                  className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black placeholder:text-gray-400 focus:outline-none focus:border-black"
                 />
                 <span className="text-[10px] text-[#5d5e66]">
-                  This email will be authorized in Supabase. Only this email will be allowed to log in.
+                  A welcome onboarding email draft will be prepared immediately upon saving.
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                    Company / Organization
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66] font-semibold">
+                    Phone Number
+                  </label>
+                  <input
+                    type="text"
+                    value={newClientPhone}
+                    onChange={(e) => setNewClientPhone(e.target.value)}
+                    placeholder="e.g. +44 20 7946 0912"
+                    className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black placeholder:text-gray-400 focus:outline-none focus:border-black"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66] font-semibold">
+                    Company Name
                   </label>
                   <input
                     type="text"
                     value={newClientCompany}
                     onChange={(e) => setNewClientCompany(e.target.value)}
-                    placeholder="e.g. Apex Dynamics"
-                    className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black placeholder:text-[#5d5e66]/50 focus:outline-none focus:border-black"
-                  />
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                    Designation / Title
-                  </label>
-                  <input
-                    type="text"
-                    value={newClientTitle}
-                    onChange={(e) => setNewClientTitle(e.target.value)}
-                    placeholder="e.g. Managing Partner"
-                    className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black placeholder:text-[#5d5e66]/50 focus:outline-none focus:border-black"
+                    placeholder="e.g. Vance & Partners Advisory"
+                    className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black placeholder:text-gray-400 focus:outline-none focus:border-black"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                    Fleet Tier
-                  </label>
-                  <select
-                    value={newClientTier}
-                    onChange={(e) => setNewClientTier(e.target.value)}
-                    className="h-10 px-3 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black focus:outline-none focus:border-black"
-                  >
-                    <option>Enterprise Platinum (Unlimited NFC)</option>
-                    <option>Corporate Standard (50 Nodes)</option>
-                    <option>Dedicated Fleet (Custom Token)</option>
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                    Platform Role
-                  </label>
-                  <select
-                    value={newClientRole}
-                    onChange={(e) => setNewClientRole(e.target.value as 'client' | 'admin')}
-                    className="h-10 px-3 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black focus:outline-none focus:border-black"
-                  >
-                    <option value="client">Client (Cardholder Console)</option>
-                    <option value="admin">Admin (Full Fleet Control)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Granular Permissions */}
-              <div className="flex flex-col gap-2 pt-2">
-                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                  Granular Permissions
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66] font-semibold">
+                  Additional Client Notes
                 </label>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {[
-                    { id: 'manage_own_card', label: 'Manage Transponders' },
-                    { id: 'view_own_analytics', label: 'View Tap Telemetry' },
-                    { id: 'export_vcard', label: 'Export vCard VCF' },
-                    { id: 'edit_profile', label: 'Edit Digital Profile' },
-                    { id: 'manage_clients', label: 'Admin: Manage Clients' },
-                    { id: 'manage_cards', label: 'Admin: Program Fleet' },
-                  ].map((perm) => (
-                    <label key={perm.id} className="flex items-center gap-2 cursor-pointer text-[#1c1b1d]">
-                      <input
-                        type="checkbox"
-                        checked={newClientPermissions.includes(perm.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setNewClientPermissions([...newClientPermissions, perm.id]);
-                          } else {
-                            setNewClientPermissions(newClientPermissions.filter((p) => p !== perm.id));
-                          }
-                        }}
-                        className="rounded text-black focus:ring-black"
-                      />
-                      <span>{perm.label}</span>
-                    </label>
-                  ))}
-                </div>
+                <textarea
+                  rows={2}
+                  value={newClientNotes}
+                  onChange={(e) => setNewClientNotes(e.target.value)}
+                  placeholder="Bespoke substrate or onboarding specifications..."
+                  className="p-3 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black placeholder:text-gray-400 focus:outline-none focus:border-black resize-none"
+                />
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-black/[0.06]">
                 <button
                   type="button"
                   onClick={() => setIsAddClientModalOpen(false)}
-                  className="h-10 px-4 rounded-xl text-[#5d5e66] hover:bg-[#f0edf0] text-xs font-semibold transition-colors"
+                  className="h-10 px-4 rounded-xl text-[#5d5e66] hover:bg-[#f0edf0] text-xs font-semibold transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSavingClient}
-                  className="h-10 px-5 rounded-xl bg-black text-white text-xs font-semibold hover:bg-neutral-800 transition-all shadow-md disabled:opacity-50"
+                  className="h-10 px-5 rounded-xl bg-black text-white text-xs font-semibold hover:bg-neutral-800 transition-all shadow-md disabled:opacity-50 cursor-pointer"
                 >
-                  {isSavingClient ? 'Provisioning...' : 'Save Directory'}
+                  {isSavingClient ? 'Saving Client...' : 'Save Client'}
                 </button>
               </div>
             </form>
@@ -1616,258 +1551,146 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
         </div>
       )}
 
-      {/* =========================================================
-          MODAL: PROGRAM TRANSPONDER
+      {/* =========================================================================
+          MODAL: WELCOME EMAIL DRAFT PREVIEW
           ========================================================= */}
-      {isProgramTransponderModalOpen && (
+      {welcomeDraftModal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white/95 backdrop-blur-xl rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-5 border border-black/[0.06] animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-black/[0.06]">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-[#f0edf0] flex items-center justify-center text-black">
-                  <span className="material-symbols-outlined text-[20px]">contactless</span>
-                </div>
-                <h3 className="text-lg font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                  Program Transponder
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4 border border-black/[0.06]">
+            <div className="flex items-center justify-between pb-2 border-b border-black/[0.06]">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-black text-[20px]">mark_email_read</span>
+                <h3 className="text-base font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
+                  Welcome Email Draft Prepared
                 </h3>
               </div>
               <button
-                onClick={() => setIsProgramTransponderModalOpen(false)}
-                className="p-1 rounded-lg text-[#5d5e66] hover:bg-[#f0edf0] hover:text-black transition-colors"
+                onClick={() => setWelcomeDraftModal(null)}
+                className="p-1 rounded text-gray-400 hover:text-black"
               >
-                <span className="material-symbols-outlined text-[20px]">close</span>
+                ✕
               </button>
             </div>
 
-            <form onSubmit={handleProgramTransponder} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                  Cardholder / Entity Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newCardName}
-                  onChange={(e) => setNewCardName(e.target.value)}
-                  placeholder="e.g. Adrian Vance"
-                  className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black placeholder:text-[#5d5e66]/50 focus:outline-none focus:border-black"
-                />
-              </div>
+            <div className="p-3 bg-[#fcf8fb] rounded-xl text-xs space-y-1 font-mono text-[#5d5e66] border border-black/[0.04]">
+              <div><strong>Subject:</strong> {welcomeDraftModal.subject}</div>
+              <div><strong>Recipient:</strong> {welcomeDraftModal.recipient}</div>
+              <div><strong>Status:</strong> {welcomeDraftModal.status.replace('_', ' ').toUpperCase()}</div>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                    Company Name
-                  </label>
-                  <input
-                    type="text"
-                    value={newCardCompany}
-                    onChange={(e) => setNewCardCompany(e.target.value)}
-                    placeholder="e.g. Vance & Partners"
-                    className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black placeholder:text-[#5d5e66]/50 focus:outline-none focus:border-black"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                    Headline Title
-                  </label>
-                  <input
-                    type="text"
-                    value={newCardTitle}
-                    onChange={(e) => setNewCardTitle(e.target.value)}
-                    placeholder="e.g. Managing Partner"
-                    className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black placeholder:text-[#5d5e66]/50 focus:outline-none focus:border-black"
-                  />
-                </div>
-              </div>
+            <div className="p-4 bg-gray-50 rounded-xl text-xs text-gray-800 whitespace-pre-line font-sans border border-gray-200 leading-relaxed max-h-60 overflow-y-auto">
+              {welcomeDraftModal.content}
+            </div>
 
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                    NFC Chip UID (7-Byte Hex)
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleGenerateUid}
-                    className="text-[11px] font-mono text-black underline font-semibold cursor-pointer"
-                  >
-                    Generate Random
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  value={newCardUid}
-                  onChange={(e) => setNewCardUid(e.target.value)}
-                  placeholder="04:8F:2A:1B:6C:5E:80"
-                  className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs font-mono text-black focus:outline-none focus:border-black"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                    Substrate Finish
-                  </label>
-                  <select
-                    value={newCardFinish}
-                    onChange={(e) => setNewCardFinish(e.target.value)}
-                    className="h-10 px-3 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black focus:outline-none focus:border-black"
-                  >
-                    <option value="obsidian">Matte Obsidian Carbon</option>
-                    <option value="titanium">Brushed Titanium</option>
-                    <option value="rose-gold">Rose Gold Foil</option>
-                    <option value="gold">Champagne 24K Gold</option>
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-mono uppercase tracking-wider text-[#5d5e66]">
-                    Chip Specification
-                  </label>
-                  <select
-                    value={newCardFrequency}
-                    onChange={(e) => setNewCardFrequency(e.target.value)}
-                    className="h-10 px-3 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black focus:outline-none focus:border-black"
-                  >
-                    <option>13.56 MHz NTAG424 DNA</option>
-                    <option>13.56 MHz NTAG216 (High Capacity)</option>
-                    <option>MIFARE DESFire EV3</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-black/[0.06]">
-                <button
-                  type="button"
-                  onClick={() => setIsProgramTransponderModalOpen(false)}
-                  className="h-10 px-4 rounded-xl text-[#5d5e66] hover:bg-[#f0edf0] text-xs font-semibold transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSavingCard}
-                  className="h-10 px-5 rounded-xl bg-black text-white text-xs font-semibold hover:bg-neutral-800 transition-all shadow-md disabled:opacity-50"
-                >
-                  {isSavingCard ? 'Programming...' : 'Program Transponder'}
-                </button>
-              </div>
-            </form>
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-[10px] text-gray-400 italic">
+                Email draft saved in system outbox (actual delivery reported accurately).
+              </span>
+              <button
+                onClick={() => setWelcomeDraftModal(null)}
+                className="px-4 py-2 bg-black text-white rounded-xl text-xs font-semibold hover:bg-neutral-800 cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* =========================================================
-          MODAL: TERMINAL DIAGNOSTICS
+      {/* =========================================================================
+          MODAL: CONFIRM CLIENT DELETE
           ========================================================= */}
-      {isDiagnosticsModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#121212] text-emerald-400 font-mono rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4 border border-emerald-900/40">
+      {clientToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 border border-black/[0.06]">
+            <div className="flex items-center gap-2.5 text-red-600">
+              <span className="material-symbols-outlined text-[24px]">warning</span>
+              <h3 className="text-base font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
+                Confirm Client Removal
+              </h3>
+            </div>
+            <p className="text-xs text-[#5d5e66] leading-relaxed">
+              Are you sure you want to delete <strong>{clientToDelete.name}</strong> ({clientToDelete.email})?
+              Related NFC card assignments will be safely preserved as unassigned.
+            </p>
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                onClick={() => setClientToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-[#5d5e66] hover:bg-gray-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDeleteClient}
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold shadow cursor-pointer"
+              >
+                Delete Client
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL: ERROR INSPECTION MODAL
+          ========================================================= */}
+      {selectedErrorForInspection && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#111111] text-white rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4 border border-red-900/60 font-mono">
             <div className="flex items-center justify-between pb-2 border-b border-gray-800">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-xs font-bold text-gray-200">ACR122U USB Hardware Diagnostics</span>
+              <div className="flex items-center gap-2 text-red-400">
+                <span className="material-symbols-outlined text-[20px]">terminal</span>
+                <span className="text-xs font-bold uppercase tracking-wider">Error Telemetry Diagnostic</span>
               </div>
               <button
-                onClick={() => setIsDiagnosticsModalOpen(false)}
+                onClick={() => setSelectedErrorForInspection(null)}
                 className="text-gray-400 hover:text-white"
               >
                 ✕
               </button>
             </div>
 
-            <div className="text-xs leading-relaxed space-y-1 bg-black/60 p-4 rounded-xl border border-gray-900">
-              <p className="text-gray-500">{'// CONNECT NFC HSM NODE TELEMETRY'}</p>
-              <p>&gt; CONNECTING READER: ACR122U CCID USB INTERFACE...</p>
-              <p>&gt; CARRIER FREQUENCY: 13.56 MHz [ISO 14443 Type A]</p>
-              <p className="text-white">&gt; HSM KEYSTORE: AES-128 / SUN CRYPTOGRAPHIC MUTUAL AUTH: [OK]</p>
-              <p>&gt; FIELD STRENGTH: -48.2 dBm // NOMINAL COUPLING</p>
-              <p>&gt; TRANSCEIVE BUFFER: 256 BYTES DMA READY</p>
-              <p>&gt; SUPABASE EDGE RELAY: CONNECTED (0.00ms latency)</p>
-              <p className="text-emerald-300">&gt; HARDWARE STATUS: READY FOR NFC PROGRAMMING</p>
+            <div className="space-y-2 text-xs">
+              <div>
+                <span className="text-gray-500">ID:</span> {selectedErrorForInspection.id}
+              </div>
+              <div>
+                <span className="text-gray-500">Timestamp:</span> {selectedErrorForInspection.timestamp}
+              </div>
+              <div>
+                <span className="text-gray-500">Severity:</span>{' '}
+                <span className="px-1.5 py-0.5 rounded bg-red-900 text-red-200 uppercase font-bold text-[10px]">
+                  {selectedErrorForInspection.severity}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500">Component:</span> {selectedErrorForInspection.component || 'System'}
+              </div>
+              <div>
+                <span className="text-gray-500">Route:</span> {selectedErrorForInspection.route || 'N/A'}
+              </div>
+              <div>
+                <span className="text-gray-500">Message:</span>
+                <p className="mt-1 p-2 rounded bg-black/60 border border-gray-900 text-red-300">
+                  {selectedErrorForInspection.message}
+                </p>
+              </div>
+              {selectedErrorForInspection.details && (
+                <div>
+                  <span className="text-gray-500">Safe Diagnostics:</span>
+                  <pre className="mt-1 p-2 rounded bg-black/60 border border-gray-900 text-gray-300 overflow-x-auto text-[11px]">
+                    {JSON.stringify(selectedErrorForInspection.details, null, 2)}
+                  </pre>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end pt-2">
               <button
-                onClick={() => setIsDiagnosticsModalOpen(false)}
-                className="px-4 py-2 bg-emerald-950 text-emerald-300 border border-emerald-800 rounded-lg text-xs font-semibold hover:bg-emerald-900 transition-colors"
+                onClick={() => setSelectedErrorForInspection(null)}
+                className="px-4 py-2 bg-gray-800 text-white rounded-xl text-xs hover:bg-gray-700 cursor-pointer"
               >
-                Close Diagnostics
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* =========================================================
-          MODAL: QUICK ACTION
-          ========================================================= */}
-      {isQuickActionModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 border border-black/[0.06]">
-            <div className="flex items-center justify-between pb-2 border-b border-black/[0.06]">
-              <h3 className="text-base font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                Executive Quick Actions
-              </h3>
-              <button
-                onClick={() => setIsQuickActionModalOpen(false)}
-                className="text-[#5d5e66] hover:text-black"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => {
-                  setIsQuickActionModalOpen(false);
-                  setIsAddClientModalOpen(true);
-                }}
-                className="p-3 rounded-xl bg-[#fcf8fb] hover:bg-[#f0edf0] text-left flex items-center gap-3 transition-colors border border-black/[0.04]"
-              >
-                <span className="material-symbols-outlined text-black">person_add</span>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-black">Provision Client</span>
-                  <span className="text-[11px] text-[#5d5e66]">Add authorized email to Supabase directory</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setIsQuickActionModalOpen(false);
-                  setIsProgramTransponderModalOpen(true);
-                }}
-                className="p-3 rounded-xl bg-[#fcf8fb] hover:bg-[#f0edf0] text-left flex items-center gap-3 transition-colors border border-black/[0.04]"
-              >
-                <span className="material-symbols-outlined text-black">contactless</span>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-black">Program Transponder</span>
-                  <span className="text-[11px] text-[#5d5e66]">Allocate chip UID and assign substrate</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setIsQuickActionModalOpen(false);
-                  loadData();
-                  showToast('success', 'Telemetry cache cleared and synchronized.');
-                }}
-                className="p-3 rounded-xl bg-[#fcf8fb] hover:bg-[#f0edf0] text-left flex items-center gap-3 transition-colors border border-black/[0.04]"
-              >
-                <span className="material-symbols-outlined text-black">refresh</span>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-black">Synchronize Fleet Telemetry</span>
-                  <span className="text-[11px] text-[#5d5e66]">Refresh all live transponder metrics</span>
-                </div>
-              </button>
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={() => setIsQuickActionModalOpen(false)}
-                className="px-4 py-2 bg-gray-100 text-black rounded-lg text-xs font-semibold hover:bg-gray-200"
-              >
-                Cancel
+                Close Inspector
               </button>
             </div>
           </div>

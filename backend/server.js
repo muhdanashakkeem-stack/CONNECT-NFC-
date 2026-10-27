@@ -79,6 +79,7 @@ const USERS_DATABASE = [
     email: 'adrian@vancepartners.com',
     name: 'Adrian Vance',
     role: 'client',
+    phone: '+44 20 7946 0912',
     company: 'Vance & Partners Advisory',
     title: 'Managing Partner & Founder',
     avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
@@ -89,6 +90,14 @@ const USERS_DATABASE = [
       'edit_profile',
     ],
     status: 'active',
+    welcomeEmailDraft: {
+      subject: 'Welcome to Our NFC Business Platform',
+      clientName: 'Adrian Vance',
+      recipient: 'adrian@vancepartners.com',
+      content: 'Hello Adrian Vance,\n\nWelcome to our NFC business platform!\n\nYour client account has been created successfully. You can access your account using your registered email address and the email verification process.\n\nOnce logged in, you will be able to manage your profile and proceed with your NFC card setup.\n\nWe look forward to helping you create your digital NFC identity.\n\nBest regards,\nThe NFC Team',
+      status: 'draft_prepared',
+      preparedAt: new Date().toISOString(),
+    },
     createdAt: new Date().toISOString(),
   },
   {
@@ -126,9 +135,15 @@ let CARDS_DATABASE = [
   {
     id: 'card_client_01',
     userId: 'usr_client_02',
+    clientId: 'usr_client_02',
     slug: 'adrian-vance',
+    profileSlug: 'adrian-vance',
+    profileUrl: `${CLIENT_URL}/profile/adrian-vance`,
+    cardIdentifier: '04:8F:2A:1B:6C:5E:80',
     cardName: 'Executive Titanium Primary',
     cardholderName: 'Adrian Vance',
+    clientName: 'Adrian Vance',
+    clientEmail: 'adrian@vancepartners.com',
     headlineTitle: 'Managing Partner & Founder',
     companyName: 'Vance & Partners Advisory',
     bio: 'Private equity advisor & cross-border mergers. Dedicated to building durable generational enterprises.',
@@ -139,6 +154,8 @@ let CARDS_DATABASE = [
     finish: 'obsidian',
     nfcChipUid: '04:8F:2A:1B:6C:5E:80',
     nfcFrequency: '13.56 MHz NTAG216',
+    registrationStatus: 'assigned',
+    programmingStatus: 'programmed',
     totalTaps: 1482,
     lastTappedAt: new Date().toISOString(),
     isActive: true,
@@ -175,6 +192,59 @@ let ORDERS_DATABASE = [
     updatedAt: new Date().toISOString(),
   },
 ];
+
+// Error Logs Database (In-Memory with safe redaction)
+let ERROR_LOGS_DATABASE = [
+  {
+    id: 'err_init_01',
+    message: 'NFC Reader ACR122U USB driver polling interval calibrated (250ms nominal).',
+    severity: 'info',
+    component: 'HardwareDaemon',
+    route: '/api/hardware/telemetry',
+    timestamp: new Date(Date.now() - 1800000).toISOString(),
+    details: { interface: 'CCID-USB', status: 'standby' },
+  },
+  {
+    id: 'err_init_02',
+    message: 'Unassigned card allocation warning: Transponder UID 04:A2:3F:89:C1:20 awaiting client registration.',
+    severity: 'warning',
+    component: 'CardRegistry',
+    route: '/api/admin/cards',
+    timestamp: new Date(Date.now() - 900000).toISOString(),
+    details: { reason: 'Pending batch assignment' },
+  },
+];
+
+// OTP Store for email-based verification (Stores email -> { otp, expiresAt, attemptsRemaining, lastSentAt })
+const OTP_STORE = new Map();
+
+// QR Assets Database (Client ID -> { originalQr, customLogo, brandedQr, createdAt })
+let QR_ASSETS_DATABASE = [];
+
+// Helper: Safely log errors without sensitive tokens/passwords
+function logAppError(message, severity = 'error', component = 'System', route = '/api', details = {}) {
+  const safeDetails = { ...details };
+  delete safeDetails.password;
+  delete safeDetails.otp;
+  delete safeDetails.token;
+  delete safeDetails.secret;
+  delete safeDetails.authorization;
+
+  const errEntry = {
+    id: `err_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    message: String(message),
+    severity,
+    component,
+    route,
+    timestamp: new Date().toISOString(),
+    details: safeDetails,
+  };
+  ERROR_LOGS_DATABASE.unshift(errEntry);
+  if (ERROR_LOGS_DATABASE.length > 100) {
+    ERROR_LOGS_DATABASE.pop();
+  }
+  return errEntry;
+}
 
 // Helper: Find provisioned user in database or Supabase Auth
 async function findProvisionedUser(email) {
@@ -332,6 +402,152 @@ app.post('/api/auth/login', async (req, res) => {
   });
 });
 
+// 2b. Email-based OTP Request Endpoint
+app.post('/api/auth/otp/send', async (req, res) => {
+  const { email } = req.body;
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ success: false, error: 'Email address is required.' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = await findProvisionedUser(normalizedEmail);
+
+  if (!user) {
+    logAppError(`Unprovisioned email attempted OTP request: ${normalizedEmail}`, 'warning', 'AuthGateway', '/api/auth/otp/send');
+    return res.status(403).json({
+      success: false,
+      error: 'Access restricted: Your email is not provisioned in the system. Clients cannot self-create an account. Please contact your platform administrator.',
+      code: 'ACCOUNT_NOT_PROVISIONED',
+    });
+  }
+
+  if (user.status === 'suspended') {
+    logAppError(`Suspended account attempted login: ${normalizedEmail}`, 'warning', 'AuthGateway', '/api/auth/otp/send');
+    return res.status(403).json({
+      success: false,
+      error: 'Your client account has been suspended. Please contact platform administrators.',
+      code: 'ACCOUNT_SUSPENDED',
+    });
+  }
+
+  const existingOtp = OTP_STORE.get(normalizedEmail);
+  const now = Date.now();
+  if (existingOtp && existingOtp.resendAvailableAt && now < existingOtp.resendAvailableAt) {
+    const secondsLeft = Math.ceil((existingOtp.resendAvailableAt - now) / 1000);
+    return res.status(429).json({
+      success: false,
+      error: `Please wait ${secondsLeft} seconds before requesting a new verification code.`,
+      secondsLeft,
+    });
+  }
+
+  // Generate 6-digit numeric OTP
+  const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = now + 10 * 60 * 1000; // 10 minutes
+  const resendAvailableAt = now + 60 * 1000; // 60 seconds cooldown
+
+  OTP_STORE.set(normalizedEmail, {
+    otp: generatedOtp,
+    expiresAt,
+    resendAvailableAt,
+    attemptsRemaining: 5,
+    userRole: user.role,
+  });
+
+  console.log(`[Backend OTP] Verification code generated for: ${normalizedEmail} (Valid for 10 min)`);
+
+  res.json({
+    success: true,
+    message: `A 6-digit verification code has been dispatched to ${normalizedEmail}.`,
+    resendCooldown: 60,
+    devOtp: process.env.NODE_ENV !== 'production' ? generatedOtp : undefined,
+  });
+});
+
+// 2c. Email-based OTP Verification Endpoint
+app.post('/api/auth/otp/verify', async (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) {
+    return res.status(400).json({ success: false, error: 'Email and 6-digit verification code are required.' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const record = OTP_STORE.get(normalizedEmail);
+
+  if (!record) {
+    return res.status(400).json({
+      success: false,
+      error: 'No active verification code found for this email. Please request a new code.',
+    });
+  }
+
+  if (Date.now() > record.expiresAt) {
+    OTP_STORE.delete(normalizedEmail);
+    logAppError(`Expired OTP code entered for: ${normalizedEmail}`, 'info', 'AuthGateway', '/api/auth/otp/verify');
+    return res.status(400).json({
+      success: false,
+      error: 'Verification code has expired. Please request a new code.',
+      code: 'OTP_EXPIRED',
+    });
+  }
+
+  if (record.attemptsRemaining <= 0) {
+    OTP_STORE.delete(normalizedEmail);
+    logAppError(`Exceeded OTP attempts for: ${normalizedEmail}`, 'warning', 'AuthGateway', '/api/auth/otp/verify');
+    return res.status(429).json({
+      success: false,
+      error: 'Maximum verification attempts exceeded. Please request a new code.',
+      code: 'OTP_MAX_ATTEMPTS',
+    });
+  }
+
+  if (record.otp !== String(otp).trim()) {
+    record.attemptsRemaining--;
+    logAppError(`Invalid OTP entered for ${normalizedEmail}. Attempts left: ${record.attemptsRemaining}`, 'warning', 'AuthGateway', '/api/auth/otp/verify');
+    return res.status(400).json({
+      success: false,
+      error: `Invalid verification code. ${record.attemptsRemaining} attempt(s) remaining.`,
+      attemptsRemaining: record.attemptsRemaining,
+    });
+  }
+
+  // OTP is valid!
+  OTP_STORE.delete(normalizedEmail);
+
+  const user = await findProvisionedUser(normalizedEmail);
+  if (!user || user.status === 'suspended') {
+    return res.status(403).json({
+      success: false,
+      error: 'Account not authorized or suspended.',
+    });
+  }
+
+  const token = jwt.sign(
+    {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+      permissions: user.permissions || [],
+      authMethod: 'email_otp',
+    },
+    JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+
+  console.log(`[Backend OTP] Email OTP verified: ${user.email} (Role: ${user.role})`);
+
+  res.json({
+    success: true,
+    data: {
+      token,
+      user,
+      expiresIn: 604800,
+    },
+    message: `Verification successful. Welcome, ${user.name}!`,
+  });
+});
+
 // 3. Google Sign-In Endpoint
 // Verifies that the Google account email is provisioned by an admin.
 app.post('/api/auth/google', async (req, res) => {
@@ -474,6 +690,15 @@ app.post('/api/admin/clients', requireAuth, requireRole(['admin']), async (req, 
     }
   }
 
+  const welcomeEmailDraft = {
+    subject: 'Welcome to Our NFC Business Platform',
+    recipient: normalizedEmail,
+    clientName: name,
+    content: `Hello ${name},\n\nWelcome to our NFC business platform!\n\nYour client account has been created successfully. You can access your account using your registered email address and the email verification process.\n\nOnce logged in, you will be able to manage your profile and proceed with your NFC card setup.\n\nWe look forward to helping you create your digital NFC identity.\n\nBest regards,\nThe NFC Team`,
+    status: 'draft_prepared',
+    preparedAt: new Date().toISOString(),
+  };
+
   const newClient = {
     id: supabaseId || `usr_client_${Date.now()}`,
     email: normalizedEmail,
@@ -484,6 +709,7 @@ app.post('/api/admin/clients', requireAuth, requireRole(['admin']), async (req, 
     phone: phone || '',
     permissions: assignedPermissions,
     status: 'active',
+    welcomeEmailDraft,
     provisionedBy: req.user.email,
     createdAt: new Date().toISOString(),
     supabaseVerified: !!supabaseId,
@@ -491,40 +717,82 @@ app.post('/api/admin/clients', requireAuth, requireRole(['admin']), async (req, 
 
   USERS_DATABASE.push(newClient);
 
-  // Automatically provision a default blank card for the client
-  if (assignedRole === 'client') {
-    const slugName = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
-    CARDS_DATABASE.push({
-      id: `card_${Date.now()}`,
-      userId: newClient.id,
-      slug: slugName,
-      cardName: `${name} Reserve`,
-      cardholderName: name,
-      headlineTitle: title || 'Executive Partner',
-      companyName: company || 'Bespoke Enterprise',
-      bio: 'Verified CONNECT NFC digital credential.',
-      email: normalizedEmail,
-      phone: phone || '',
-      location: 'Global',
-      avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
-      finish: 'obsidian',
-      nfcChipUid: '04:' + Math.random().toString(16).substr(2, 8).toUpperCase(),
-      nfcFrequency: '13.56 MHz NTAG216',
-      totalTaps: 0,
-      lastTappedAt: null,
-      isActive: true,
-      socialLinks: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-  }
+  logAppError(`Client created: ${name} (${normalizedEmail})`, 'info', 'ClientManagement', '/api/admin/clients');
 
   console.log(`[Admin Portal] Admin ${req.user.email} successfully provisioned new client: ${normalizedEmail} (Role: ${assignedRole})`);
 
   res.status(201).json({
     success: true,
     data: newClient,
-    message: `Client ${name} (${normalizedEmail}) has been successfully provisioned. They can now log in.`,
+    welcomeEmail: welcomeEmailDraft,
+    message: `Client ${name} (${normalizedEmail}) has been successfully provisioned. Welcome email draft prepared.`,
+  });
+});
+
+// 7b. Get Client Welcome Email Draft
+app.get('/api/admin/clients/:id/welcome-email', requireAuth, requireRole(['admin']), (req, res) => {
+  const user = USERS_DATABASE.find((u) => u.id === req.params.id);
+  if (!user) {
+    return res.status(404).json({ success: false, error: 'Client not found.' });
+  }
+  const draft = user.welcomeEmailDraft || {
+    subject: 'Welcome to Our NFC Business Platform',
+    clientName: user.name,
+    recipient: user.email,
+    content: `Hello ${user.name},\n\nWelcome to our NFC business platform!\n\nYour client account has been created successfully. You can access your account using your registered email address and the email verification process.\n\nOnce logged in, you will be able to manage your profile and proceed with your NFC card setup.\n\nWe look forward to helping you create your digital NFC identity.\n\nBest regards,\nThe NFC Team`,
+    status: 'draft_prepared',
+    preparedAt: user.createdAt,
+  };
+  res.json({ success: true, data: draft });
+});
+
+// 7c. Send/Dispatch Welcome Email (Accurately reports actual delivery status)
+app.post('/api/admin/clients/:id/send-welcome', requireAuth, requireRole(['admin']), (req, res) => {
+  const user = USERS_DATABASE.find((u) => u.id === req.params.id);
+  if (!user) {
+    return res.status(404).json({ success: false, error: 'Client not found.' });
+  }
+
+  if (user.welcomeEmailDraft) {
+    user.welcomeEmailDraft.status = 'queued_in_outbox';
+    user.welcomeEmailDraft.lastActionAt = new Date().toISOString();
+  }
+
+  logAppError(`Welcome email queued for delivery: ${user.email}`, 'info', 'ClientManagement', '/api/admin/clients/send-welcome');
+
+  res.json({
+    success: true,
+    data: user.welcomeEmailDraft,
+    delivered: false,
+    message: `Welcome email for ${user.name} has been queued in system outbox (SMTP mailer is in staging mode).`,
+  });
+});
+
+// 7d. Suspend or Reactivate Client Account
+app.patch('/api/admin/clients/:id/suspend', requireAuth, requireRole(['admin']), async (req, res) => {
+  const user = USERS_DATABASE.find((u) => u.id === req.params.id);
+  if (!user) {
+    return res.status(404).json({ success: false, error: 'Client not found.' });
+  }
+
+  user.status = user.status === 'active' ? 'suspended' : 'active';
+
+  if (supabase && user.supabaseVerified) {
+    try {
+      await supabase.auth.admin.updateUserById(user.id, {
+        user_metadata: { status: user.status },
+      });
+    } catch (e) {
+      console.warn('[Backend Supabase] Suspend update warning:', e.message);
+    }
+  }
+
+  logAppError(`Client ${user.name} (${user.email}) status changed to: ${user.status}`, user.status === 'suspended' ? 'warning' : 'info', 'ClientManagement', '/api/admin/clients/suspend');
+
+  res.json({
+    success: true,
+    data: user,
+    message: `Client ${user.name} is now ${user.status}.`,
   });
 });
 
@@ -535,11 +803,12 @@ app.put('/api/admin/clients/:id', requireAuth, requireRole(['admin']), async (re
     return res.status(404).json({ success: false, error: 'Client not found.' });
   }
 
-  const { name, company, title, permissions, status, role } = req.body;
+  const { name, company, title, phone, permissions, status, role } = req.body;
 
   if (name) user.name = name;
   if (company) user.company = company;
   if (title) user.title = title;
+  if (phone) user.phone = phone;
   if (Array.isArray(permissions)) user.permissions = permissions;
   if (status) user.status = status;
   if (role) user.role = role;
@@ -552,6 +821,7 @@ app.put('/api/admin/clients/:id', requireAuth, requireRole(['admin']), async (re
           name: user.name,
           company: user.company,
           title: user.title,
+          phone: user.phone,
           permissions: user.permissions,
           status: user.status,
           role: user.role,
@@ -570,6 +840,7 @@ app.put('/api/admin/clients/:id', requireAuth, requireRole(['admin']), async (re
 });
 
 // 9. Revoke / Delete Client (Admin only)
+// Safely unassigns or detaches related NFC cards to prevent orphan corruption
 app.delete('/api/admin/clients/:id', requireAuth, requireRole(['admin']), async (req, res) => {
   const index = USERS_DATABASE.findIndex((u) => u.id === req.params.id);
   if (index === -1) {
@@ -577,6 +848,17 @@ app.delete('/api/admin/clients/:id', requireAuth, requireRole(['admin']), async 
   }
 
   const removed = USERS_DATABASE.splice(index, 1)[0];
+
+  // Safely handle related NFC card assignments (do not silently destroy physical hardware records)
+  CARDS_DATABASE.forEach((c) => {
+    if (c.userId === removed.id || c.clientId === removed.id) {
+      c.registrationStatus = 'unassigned';
+      c.clientName = 'Unassigned';
+      c.clientEmail = '';
+      c.userId = null;
+      c.clientId = null;
+    }
+  });
 
   // Remove from Supabase
   if (supabase && removed.supabaseVerified) {
@@ -587,10 +869,12 @@ app.delete('/api/admin/clients/:id', requireAuth, requireRole(['admin']), async 
     }
   }
 
+  logAppError(`Client ${removed.name} (${removed.email}) deleted. Associated NFC cards set to unassigned.`, 'warning', 'ClientManagement', '/api/admin/clients');
+
   res.json({
     success: true,
     data: removed,
-    message: `Client ${removed.email} revoked. They can no longer sign in.`,
+    message: `Client ${removed.email} removed from directory. Related NFC cards unassigned safely.`,
   });
 });
 
@@ -766,6 +1050,172 @@ app.get('/api/admin/settings', requireAuth, requireRole(['admin']), (req, res) =
 app.post('/api/admin/settings', requireAuth, requireRole(['admin']), (req, res) => {
   SYSTEM_SETTINGS = { ...SYSTEM_SETTINGS, ...req.body, lastSavedAt: new Date().toISOString() };
   res.json({ success: true, data: SYSTEM_SETTINGS, message: 'Platform configuration successfully synchronized.' });
+});
+
+// Dynamic Dashboard Summary Counts
+app.get('/api/admin/stats', requireAuth, requireRole(['admin']), (req, res) => {
+  const totalCards = CARDS_DATABASE.length;
+  const totalClients = USERS_DATABASE.filter((u) => u.role === 'client').length;
+  const pendingOrders = ORDERS_DATABASE.filter((o) => o.status === 'in_production' || o.status === 'pending').length;
+  res.json({
+    success: true,
+    data: {
+      totalCards,
+      totalClients,
+      pendingOrders,
+    },
+  });
+});
+
+// Dedicated Error Tracking Panel Endpoints (Strict 10-entry display limit)
+app.get('/api/errors', (req, res) => {
+  res.json({
+    success: true,
+    data: ERROR_LOGS_DATABASE.slice(0, 10),
+    total: ERROR_LOGS_DATABASE.length,
+  });
+});
+
+app.post('/api/errors', (req, res) => {
+  const { message, severity, component, route, details } = req.body;
+  if (!message) {
+    return res.status(400).json({ success: false, error: 'Error message is required.' });
+  }
+  const entry = logAppError(message, severity || 'error', component || 'ClientApp', route || '/client', details);
+  res.status(201).json({ success: true, data: entry });
+});
+
+app.delete('/api/errors/:id', requireAuth, requireRole(['admin']), (req, res) => {
+  const idx = ERROR_LOGS_DATABASE.findIndex((e) => e.id === req.params.id);
+  if (idx !== -1) {
+    ERROR_LOGS_DATABASE.splice(idx, 1);
+  }
+  res.json({ success: true, message: 'Error log entry resolved.' });
+});
+
+app.delete('/api/errors', requireAuth, requireRole(['admin']), (req, res) => {
+  ERROR_LOGS_DATABASE = [];
+  res.json({ success: true, message: 'All error logs cleared.' });
+});
+
+// NFC Card Registration Workflow (Assigns card to client and generates unique profile URL)
+app.post('/api/admin/cards/register', requireAuth, requireRole(['admin']), (req, res) => {
+  const { clientId, cardIdentifier, finish, notes } = req.body;
+  if (!clientId || !cardIdentifier) {
+    return res.status(400).json({ success: false, error: 'Client selection and Card Identifier / Serial Number are required.' });
+  }
+
+  const normalizedIdentifier = String(cardIdentifier).trim().toUpperCase();
+
+  // Prevent duplicate card assignment across entire fleet
+  const duplicate = CARDS_DATABASE.find(
+    (c) => (c.cardIdentifier && c.cardIdentifier.toUpperCase() === normalizedIdentifier) ||
+           (c.nfcChipUid && c.nfcChipUid.toUpperCase() === normalizedIdentifier)
+  );
+  if (duplicate) {
+    logAppError(`Duplicate NFC card registration attempted for serial: ${normalizedIdentifier}`, 'warning', 'CardRegistry', '/api/admin/cards/register');
+    return res.status(409).json({
+      success: false,
+      error: `Card identifier "${normalizedIdentifier}" is already registered in the system (assigned to ${duplicate.cardholderName || 'another client'}).`,
+    });
+  }
+
+  // Check client exists and is not suspended
+  const client = USERS_DATABASE.find((u) => u.id === clientId);
+  if (!client) {
+    return res.status(404).json({ success: false, error: 'Selected client not found in directory.' });
+  }
+  if (client.status === 'suspended') {
+    logAppError(`Card assignment rejected: Client ${client.name} is suspended.`, 'warning', 'CardRegistry', '/api/admin/cards/register');
+    return res.status(403).json({
+      success: false,
+      error: `Cannot register an NFC card for suspended client "${client.name}". Please reactivate the client first.`,
+    });
+  }
+
+  // Generate unique, collision-resistant profile URL
+  const baseSlug = (client.name || 'client')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  const uniqueSuffix = Math.random().toString(36).substring(2, 6);
+  const profileSlug = `${baseSlug}-${uniqueSuffix}`;
+  const profileUrl = `${CLIENT_URL}/profile/${profileSlug}`;
+
+  const newCard = {
+    id: `card_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    userId: client.id,
+    clientId: client.id,
+    slug: profileSlug,
+    profileSlug,
+    profileUrl,
+    cardIdentifier: normalizedIdentifier,
+    nfcChipUid: normalizedIdentifier,
+    cardName: `${client.name} Executive NFC`,
+    cardholderName: client.name,
+    clientName: client.name,
+    clientEmail: client.email,
+    companyName: client.company || 'Enterprise Partner',
+    headlineTitle: client.title || 'Executive Cardholder',
+    phone: client.phone || '',
+    email: client.email,
+    finish: finish || 'obsidian',
+    nfcFrequency: '13.56 MHz NTAG424 DNA',
+    registrationStatus: 'assigned',
+    programmingStatus: 'unprogrammed',
+    notes: notes || '',
+    totalTaps: 0,
+    lastTappedAt: null,
+    isActive: true,
+    socialLinks: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  CARDS_DATABASE.unshift(newCard);
+
+  logAppError(`NFC Card ${normalizedIdentifier} assigned to client ${client.name} (${profileUrl})`, 'info', 'CardRegistry', '/api/admin/cards/register');
+
+  res.status(201).json({
+    success: true,
+    data: newCard,
+    message: `Card ${normalizedIdentifier} successfully assigned to ${client.name}.`,
+  });
+});
+
+// Mark NFC Card as Programmed (used after External NFC Tools app or Web NFC)
+app.patch('/api/admin/cards/:id/programmed', requireAuth, requireRole(['admin']), (req, res) => {
+  const card = CARDS_DATABASE.find((c) => c.id === req.params.id);
+  if (!card) {
+    return res.status(404).json({ success: false, error: 'Card not found.' });
+  }
+  card.programmingStatus = 'programmed';
+  card.updatedAt = new Date().toISOString();
+  logAppError(`NFC card ${card.cardIdentifier || card.nfcChipUid} marked as programmed.`, 'info', 'CardRegistry', '/api/admin/cards/programmed');
+  res.json({
+    success: true,
+    data: card,
+    message: `Card ${card.cardIdentifier || card.nfcChipUid} marked as programmed.`,
+  });
+});
+
+// QR Code Asset Management
+app.post('/api/admin/qr/save', requireAuth, requireRole(['admin']), (req, res) => {
+  const { clientId, profileUrl, originalQrData, customLogoData, brandedQrData } = req.body;
+  if (!clientId || !profileUrl) {
+    return res.status(400).json({ success: false, error: 'Client ID and profile URL are required.' });
+  }
+  const asset = {
+    id: `qr_${Date.now()}`,
+    clientId,
+    profileUrl,
+    originalQrData,
+    customLogoData,
+    brandedQrData,
+    createdAt: new Date().toISOString(),
+  };
+  QR_ASSETS_DATABASE.push(asset);
+  res.status(201).json({ success: true, data: asset, message: 'Branded QR code asset saved.' });
 });
 
 // 13. Orders endpoint
