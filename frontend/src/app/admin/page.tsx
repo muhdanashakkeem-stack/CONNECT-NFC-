@@ -1,8 +1,10 @@
 'use client';
 
 import React from 'react';
-import { AdminOverview } from '@/components/dashboard/AdminOverview';
+import { ObsidianPrismAdmin } from '@/components/admin/ObsidianPrismAdmin';
+import { useRouter } from 'next/navigation';
 
 export default function AdminPage() {
-  return <AdminOverview />;
+  const router = useRouter();
+  return <ObsidianPrismAdmin onTogglePublicView={() => router.push('/')} />;
 }

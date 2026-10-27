@@ -11,15 +11,22 @@ import { HowItWorks } from '@/components/landing/HowItWorks';
 import { Stories } from '@/components/landing/Stories';
 import { ContactPortal } from '@/components/landing/ContactPortal';
 import { Footer } from '@/components/landing/Footer';
-import { AdminOverview } from '@/components/dashboard/AdminOverview';
+import { ObsidianPrismAdmin } from '@/components/admin/ObsidianPrismAdmin';
 import { ClientOverview } from '@/components/dashboard/ClientOverview';
 import { CustomerOverview } from '@/components/dashboard/CustomerOverview';
-import AdminUsersPage from '@/app/admin/users/page';
 
 export default function UnifiedRolePortal() {
   const { isAuthenticated, role, user, logout, isLoading } = useAuth();
   const [viewRoleDashboard, setViewRoleDashboard] = useState<boolean>(true);
-  const [adminTab, setAdminTab] = useState<'overview' | 'clients'>('overview');
+
+  // If Admin and in Dashboard View, render the master Obsidian Prism Admin Panel directly
+  if (isAuthenticated && role === 'admin' && viewRoleDashboard) {
+    return (
+      <ObsidianPrismAdmin
+        onTogglePublicView={() => setViewRoleDashboard(false)}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-on-surface">
@@ -49,7 +56,7 @@ export default function UnifiedRolePortal() {
             {/* View Switcher: Role Console vs Landing Page */}
             <button
               onClick={() => setViewRoleDashboard(!viewRoleDashboard)}
-              className="px-3 py-1.5 rounded bg-[#1e1e1e] hover:bg-[#2a2a2a] text-gray-200 border border-gray-700 flex items-center gap-1.5 transition-colors"
+              className="px-3 py-1.5 rounded bg-[#1e1e1e] hover:bg-[#2a2a2a] text-gray-200 border border-gray-700 flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <span className="material-symbols-outlined text-sm">
                 {viewRoleDashboard ? 'public' : 'dashboard'}
@@ -60,7 +67,7 @@ export default function UnifiedRolePortal() {
             {/* Sign Out */}
             <button
               onClick={logout}
-              className="px-3 py-1.5 rounded bg-red-950/60 hover:bg-red-900 border border-red-800 text-red-200 flex items-center gap-1 transition-colors"
+              className="px-3 py-1.5 rounded bg-red-950/60 hover:bg-red-900 border border-red-800 text-red-200 flex items-center gap-1 transition-colors cursor-pointer"
             >
               <span className="material-symbols-outlined text-sm">logout</span>
               <span>Sign Out</span>
@@ -69,49 +76,11 @@ export default function UnifiedRolePortal() {
         </div>
       )}
 
-      {/* Role-Based Dashboard View (When authenticated and active) */}
+      {/* Role-Based Dashboard View for Client/Customer (When authenticated and active) */}
       {isAuthenticated && viewRoleDashboard ? (
         <div className="flex-1 w-full flex flex-col">
-          {/* Admin Mode Sub-Navigation (Switch between Overview and Client Provisioning) */}
-          {role === 'admin' && (
-            <div className="w-full bg-surface-container-low border-b border-outline-variant/20 px-6 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setAdminTab('overview')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${
-                    adminTab === 'overview'
-                      ? 'bg-secondary-container text-white'
-                      : 'text-outline hover:text-white'
-                  }`}
-                >
-                  Fleet Overview
-                </button>
-                <button
-                  onClick={() => setAdminTab('clients')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors ${
-                    adminTab === 'clients'
-                      ? 'bg-secondary-container text-white'
-                      : 'text-outline hover:text-white'
-                  }`}
-                >
-                  Manage Clients & Permissions
-                </button>
-              </div>
-              <span className="text-[11px] text-outline font-mono">
-                Single Access Link: http://localhost:3000
-              </span>
-            </div>
-          )}
-
-          {/* Render Designated Role Screen */}
           <main className="flex-1 w-full p-4 md:p-6">
-            {role === 'admin' ? (
-              adminTab === 'overview' ? (
-                <AdminOverview />
-              ) : (
-                <AdminUsersPage />
-              )
-            ) : role === 'client' ? (
+            {role === 'client' ? (
               <ClientOverview />
             ) : (
               <CustomerOverview />

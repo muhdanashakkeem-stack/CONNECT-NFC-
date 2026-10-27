@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Playfair_Display, Plus_Jakarta_Sans } from 'next/font/google';
+import { Playfair_Display, Plus_Jakarta_Sans, Inter } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth/context';
 
@@ -15,6 +15,12 @@ const plusJakarta = Plus_Jakarta_Sans({
   display: 'swap',
 });
 
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+});
+
 export const metadata: Metadata = {
   title: 'CONNECT NFC — Bespoke Digital Distinction',
   description:
@@ -27,7 +33,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`dark ${playfair.variable} ${plusJakarta.variable}`}>
+    <html lang="en" className={`dark ${playfair.variable} ${plusJakarta.variable} ${inter.variable}`}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />

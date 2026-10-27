@@ -670,6 +670,104 @@ app.get('/api/inquiries', requireAuth, requireRole(['admin']), (req, res) => {
   res.json({ success: true, data: INQUIRIES_DATABASE });
 });
 
+app.patch('/api/inquiries/:id', requireAuth, requireRole(['admin']), (req, res) => {
+  const inquiry = INQUIRIES_DATABASE.find((i) => i.id === req.params.id);
+  if (!inquiry) {
+    return res.status(404).json({ success: false, error: 'Inquiry not found.' });
+  }
+  const { status, notes } = req.body;
+  if (status) inquiry.status = status;
+  if (notes !== undefined) inquiry.notes = notes;
+  res.json({ success: true, data: inquiry, message: 'Inquiry updated successfully.' });
+});
+
+// Admin NFC Card & Transponder Fleet Management
+app.post('/api/admin/cards', requireAuth, requireRole(['admin']), (req, res) => {
+  const { cardholderName, companyName, headlineTitle, nfcChipUid, nfcFrequency, finish, email, phone, location, bio } = req.body;
+  if (!cardholderName) {
+    return res.status(400).json({ success: false, error: 'Cardholder name is required.' });
+  }
+
+  const slug = (cardholderName || 'client')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') + '-' + Math.floor(100 + Math.random() * 900);
+
+  const newCard = {
+    id: `card_${Date.now()}`,
+    userId: req.body.userId || 'usr_client_02',
+    slug,
+    cardName: `${cardholderName} Transponder`,
+    cardholderName,
+    headlineTitle: headlineTitle || 'CONNECT NFC Fleet Member',
+    companyName: companyName || 'Enterprise Client',
+    bio: bio || 'Contactless credentials verified on CONNECT NFC network.',
+    email: email || '',
+    phone: phone || '',
+    location: location || 'Global',
+    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
+    finish: finish || 'obsidian',
+    nfcChipUid: nfcChipUid || `04:${Array.from({length: 6}, () => Math.floor(Math.random()*256).toString(16).padStart(2,'0').toUpperCase()).join(':')}`,
+    nfcFrequency: nfcFrequency || '13.56 MHz NTAG424 DNA',
+    totalTaps: 0,
+    lastTappedAt: null,
+    isActive: true,
+    socialLinks: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  CARDS_DATABASE.unshift(newCard);
+  res.status(201).json({ success: true, data: newCard, message: 'NFC Transponder programmed and registered.' });
+});
+
+app.patch('/api/admin/cards/:id', requireAuth, requireRole(['admin']), (req, res) => {
+  const card = CARDS_DATABASE.find((c) => c.id === req.params.id);
+  if (!card) {
+    return res.status(404).json({ success: false, error: 'Transponder card not found.' });
+  }
+  const { isActive, cardholderName, companyName, finish, nfcChipUid } = req.body;
+  if (isActive !== undefined) card.isActive = isActive;
+  if (cardholderName) card.cardholderName = cardholderName;
+  if (companyName) card.companyName = companyName;
+  if (finish) card.finish = finish;
+  if (nfcChipUid) card.nfcChipUid = nfcChipUid;
+  card.updatedAt = new Date().toISOString();
+  res.json({ success: true, data: card, message: 'Transponder configuration updated.' });
+});
+
+app.delete('/api/admin/cards/:id', requireAuth, requireRole(['admin']), (req, res) => {
+  const index = CARDS_DATABASE.findIndex((c) => c.id === req.params.id);
+  if (index === -1) {
+    return res.status(404).json({ success: false, error: 'Transponder card not found.' });
+  }
+  const removed = CARDS_DATABASE.splice(index, 1)[0];
+  res.json({ success: true, data: removed, message: 'Transponder revoked from fleet registry.' });
+});
+
+// Admin System Settings
+let SYSTEM_SETTINGS = {
+  nodeId: 'HSM-EU-09',
+  keystore: 'AES-256 / HSM Vault',
+  telemetryMode: 'TLS 1.3 Strict',
+  fleetAuth: 'mTLS Enabled',
+  rbacLevel: 'Granular Role-Based',
+  supabaseSync: !!supabase,
+  vanityDomain: 'connectnfc.com',
+  autoLockOnTamper: true,
+  lastSavedAt: new Date().toISOString(),
+};
+
+app.get('/api/admin/settings', requireAuth, requireRole(['admin']), (req, res) => {
+  SYSTEM_SETTINGS.supabaseSync = !!supabase;
+  res.json({ success: true, data: SYSTEM_SETTINGS });
+});
+
+app.post('/api/admin/settings', requireAuth, requireRole(['admin']), (req, res) => {
+  SYSTEM_SETTINGS = { ...SYSTEM_SETTINGS, ...req.body, lastSavedAt: new Date().toISOString() };
+  res.json({ success: true, data: SYSTEM_SETTINGS, message: 'Platform configuration successfully synchronized.' });
+});
+
 // 13. Orders endpoint
 app.get('/api/orders', requireAuth, (req, res) => {
   if (req.user.role === 'admin') {
