@@ -12,12 +12,12 @@ interface RoleGuardProps {
 }
 
 export const RoleGuard: React.FC<RoleGuardProps> = ({ children, allowedRoles }) => {
-  const { user, role, isAuthenticated, isLoading } = useAuth();
+  const { role, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push('/login');
+      router.push('/');
     }
   }, [isLoading, isAuthenticated, router]);
 
@@ -53,10 +53,10 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({ children, allowedRoles }) 
               Go to Your Dashboard
             </Link>
             <Link
-              href="/login"
+              href="/"
               className="px-4 py-2.5 rounded bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-sm text-label-sm uppercase tracking-wider transition-all"
             >
-              Switch Account
+              Return Home
             </Link>
           </div>
         </div>
