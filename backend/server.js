@@ -261,7 +261,12 @@ async function findProvisionedUser(email) {
 
   // 1. Check in-memory store
   let user = USERS_DATABASE.find((u) => u.email.toLowerCase() === normalized);
-  if (user) return user;
+  if (user) {
+    if (user.role === 'admin' || user.role === 'superadmin' || user.isSuperAdmin) {
+      user.status = 'active';
+    }
+    return user;
+  }
 
   // 2. Check Supabase Auth
   if (supabase) {
@@ -293,7 +298,7 @@ async function findProvisionedUser(email) {
                   'edit_system_settings',
                 ]
               : (meta.permissions || ['manage_own_card', 'view_own_analytics']),
-            status: meta.status || 'active',
+            status: isAdminRole ? 'active' : (meta.status || 'active'),
             createdAt: found.created_at || new Date().toISOString(),
             supabaseVerified: true,
           };
@@ -389,7 +394,7 @@ app.post('/api/auth/login', async (req, res) => {
     });
   }
 
-  if (user.status === 'suspended') {
+  if (user.status === 'suspended' && user.role !== 'admin' && user.role !== 'superadmin' && !user.isSuperAdmin) {
     return res.status(403).json({
       success: false,
       error: 'Account access has been suspended. Please contact concierge support.',
@@ -443,7 +448,7 @@ app.post('/api/auth/otp/send', async (req, res) => {
     });
   }
 
-  if (user.status === 'suspended') {
+  if (user.status === 'suspended' && user.role !== 'admin' && user.role !== 'superadmin' && !user.isSuperAdmin) {
     logAppError(`Suspended account attempted login: ${normalizedEmail}`, 'warning', 'AuthGateway', '/api/auth/otp/send');
     return res.status(403).json({
       success: false,
@@ -666,7 +671,7 @@ app.post('/api/auth/google', async (req, res) => {
     });
   }
 
-  if (user.status === 'suspended') {
+  if (user.status === 'suspended' && user.role !== 'admin' && user.role !== 'superadmin' && !user.isSuperAdmin) {
     return res.status(403).json({
       success: false,
       error: 'Your account has been suspended. Please contact platform administrators.',
@@ -832,6 +837,10 @@ app.get('/api/admin/clients/:id/welcome-email', requireAuth, requireRole(['admin
   if (!user) {
     return res.status(404).json({ success: false, error: 'Client not found.' });
   }
+
+  if (user.role === 'admin' || user.role === 'superadmin' || user.isSuperAdmin) {
+    return res.status(400).json({ success: false, error: 'Platform administrators and Super Admins cannot be suspended.' });
+  }
   const draft = user.welcomeEmailDraft || {
     subject: 'Welcome to Our NFC Business Platform',
     clientName: user.name,
@@ -848,6 +857,10 @@ app.post('/api/admin/clients/:id/send-welcome', requireAuth, requireRole(['admin
   const user = USERS_DATABASE.find((u) => u.id === req.params.id);
   if (!user) {
     return res.status(404).json({ success: false, error: 'Client not found.' });
+  }
+
+  if (user.role === 'admin' || user.role === 'superadmin' || user.isSuperAdmin) {
+    return res.status(400).json({ success: false, error: 'Platform administrators and Super Admins cannot be suspended.' });
   }
 
   if (user.welcomeEmailDraft) {
@@ -870,6 +883,10 @@ app.patch('/api/admin/clients/:id/suspend', requireAuth, requireRole(['admin']),
   const user = USERS_DATABASE.find((u) => u.id === req.params.id);
   if (!user) {
     return res.status(404).json({ success: false, error: 'Client not found.' });
+  }
+
+  if (user.role === 'admin' || user.role === 'superadmin' || user.isSuperAdmin) {
+    return res.status(400).json({ success: false, error: 'Platform administrators and Super Admins cannot be suspended.' });
   }
 
   user.status = user.status === 'active' ? 'suspended' : 'active';
@@ -898,6 +915,10 @@ app.put('/api/admin/clients/:id', requireAuth, requireRole(['admin']), async (re
   const user = USERS_DATABASE.find((u) => u.id === req.params.id);
   if (!user) {
     return res.status(404).json({ success: false, error: 'Client not found.' });
+  }
+
+  if (user.role === 'admin' || user.role === 'superadmin' || user.isSuperAdmin) {
+    return res.status(400).json({ success: false, error: 'Platform administrators and Super Admins cannot be suspended.' });
   }
 
   const { name, company, title, phone, permissions, status, role } = req.body;

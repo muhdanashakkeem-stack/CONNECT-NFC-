@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { getRedirectPathForRole } from '@/lib/auth/session';
+import { getRedirectPathForRole, setStoredToken, setStoredUser } from '@/lib/auth/session';
 
 interface SignInModalProps {
   isOpen: boolean;
@@ -152,19 +152,17 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose }) => 
       }
 
       // Store authenticated session
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('speed_nfc_token', data.data.token);
-        localStorage.setItem('speed_nfc_user', JSON.stringify(data.data.user));
-      }
+      setStoredToken(data.data.token);
+      setStoredUser(data.data.user);
 
       setIsVerifiedSuccess(true);
 
-      // Brief transition delay to show success
+      // Transition to authorized dashboard
       setTimeout(() => {
         onClose();
-        router.push(getRedirectPathForRole(data.data.user.role));
-        window.location.reload();
-      }, 1000);
+        const targetPath = getRedirectPathForRole(data.data.user.role);
+        window.location.href = targetPath;
+      }, 700);
     } catch (err: any) {
       setErrorMsg(err.message || 'Verification failed. Please try again.');
     } finally {
@@ -198,14 +196,12 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose }) => 
         throw new Error(data.error || 'Google Sign-In failed.');
       }
 
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('speed_nfc_token', data.data.token);
-        localStorage.setItem('speed_nfc_user', JSON.stringify(data.data.user));
-      }
+      setStoredToken(data.data.token);
+      setStoredUser(data.data.user);
 
       onClose();
-      router.push(getRedirectPathForRole(data.data.user.role));
-      window.location.reload();
+      const targetPath = getRedirectPathForRole(data.data.user.role);
+      window.location.href = targetPath;
     } catch (err: any) {
       setErrorMsg(err.message || 'Google Sign-In Denied.');
     } finally {
