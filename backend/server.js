@@ -3,11 +3,15 @@ const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const { createClient } = require('@supabase/supabase-js');
+const { Resend } = require('resend');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:3000';
 const JWT_SECRET = process.env.SUPABASE_SECRET_KEY || 'speed_nfc_super_secret_jwt_key_2026';
+
+// Initialize Resend Email Engine
+const resend = new Resend(process.env.RESEND_API_KEY || '');
 
 // Initialize Supabase admin client (server-side only)
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -472,36 +476,47 @@ app.post('/api/auth/otp/send', async (req, res) => {
     userRole: user.role,
   });
 
-  console.log(`[Backend OTP] Verification code generated for: ${normalizedEmail} -> [${generatedOtp}] (Valid for 10 min)`);
+  // Dispatch real email OTP via Resend SDK
+  try {
+    const fromAddress = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+    const { data: resendData, error: resendError } = await resend.emails.send({
+      from: fromAddress,
+      to: normalizedEmail,
+      subject: `Your CONNECT NFC Verification Code: ${generatedOtp}`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 28px; border: 1px solid #eaeaea; border-radius: 12px; background: #ffffff;">
+          <h2 style="color: #111; margin-top: 0; font-size: 20px;">CONNECT NFC Verification</h2>
+          <p style="color: #444; font-size: 14px; line-height: 1.5;">Here is your 6-digit verification code to sign in to your CONNECT NFC account:</p>
+          <div style="background: #f4f4f5; padding: 18px; text-align: center; border-radius: 8px; margin: 24px 0;">
+            <span style="font-family: monospace; font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #000000;">${generatedOtp}</span>
+          </div>
+          <p style="color: #666; font-size: 12px; margin-bottom: 0;">This code is valid for 10 minutes. If you did not request this code, you can safely ignore this email.</p>
+        </div>
+      `,
+    });
 
-  // Disptach real email OTP via Supabase Auth
-  let emailDispatched = false;
-  if (supabase) {
-    try {
-      const { error: sbOtpError } = await supabase.auth.signInWithOtp({
-        email: normalizedEmail,
-        options: {
-          shouldCreateUser: false,
-        },
+    if (resendError) {
+      logAppError(`Resend dispatch error for ${normalizedEmail}: ${resendError.message}`, 'error', 'EmailEngine', '/api/auth/otp/send');
+      return res.status(500).json({
+        success: false,
+        error: `Failed to deliver verification code via email: ${resendError.message}`,
       });
-      if (sbOtpError) {
-        console.warn(`[Supabase OTP] signInWithOtp notice for ${normalizedEmail}:`, sbOtpError.message);
-      } else {
-        emailDispatched = true;
-        console.log(`[Supabase OTP] Real OTP email dispatched successfully by Supabase to: ${normalizedEmail}`);
-      }
-    } catch (err) {
-      console.warn('[Supabase OTP] Exception while sending email:', err.message);
     }
+
+    console.log(`[Resend Engine] Verification code email sent to: ${normalizedEmail} (ID: ${resendData?.id})`);
+  } catch (emailErr) {
+    logAppError(`Resend send exception for ${normalizedEmail}: ${emailErr.message}`, 'error', 'EmailEngine', '/api/auth/otp/send');
+    return res.status(500).json({
+      success: false,
+      error: `Failed to send verification email: ${emailErr.message}`,
+    });
   }
 
+  // Do NOT return the OTP code in the API JSON response; only return a success status message.
   res.json({
     success: true,
-    message: emailDispatched
-      ? `A 6-digit verification code has been dispatched to your email (${normalizedEmail}).`
-      : `A verification code has been generated for ${normalizedEmail}.`,
+    message: `A 6-digit verification code has been dispatched to ${normalizedEmail}. Please check your inbox.`,
     resendCooldown: 60,
-    devOtp: generatedOtp,
   });
 });
 
