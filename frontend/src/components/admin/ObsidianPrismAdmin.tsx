@@ -789,32 +789,32 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
                 </div>
               </div>
 
-              {/* ONLY ONE DEDICATED RED ERROR-TRACKING BOX (Strictly Max 10 Entries) */}
-              <div className="w-full rounded-2xl bg-gradient-to-br from-red-950/90 to-red-900/95 border-2 border-red-500/60 shadow-xl p-6 sm:p-7 text-white flex flex-col gap-4 relative overflow-hidden backdrop-blur-2xl">
-                {/* Visual Glass highlights */}
-                <div className="absolute -top-24 -right-24 w-60 h-60 bg-red-500/20 rounded-full blur-3xl pointer-events-none"></div>
+              {/* ONLY ONE DEDICATED RED ERROR-TRACKING BOX (Displayed strictly when errors exist) */}
+              {errors.length > 0 && (
+                <div className="w-full rounded-2xl bg-gradient-to-br from-red-950/90 to-red-900/95 border-2 border-red-500/60 shadow-xl p-6 sm:p-7 text-white flex flex-col gap-4 relative overflow-hidden backdrop-blur-2xl animate-fade-in">
+                  {/* Visual Glass highlights */}
+                  <div className="absolute -top-24 -right-24 w-60 h-60 bg-red-500/20 rounded-full blur-3xl pointer-events-none"></div>
 
-                {/* Panel Header */}
-                <div className="flex items-center justify-between border-b border-red-800/80 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-red-600/30 border border-red-400/40 flex items-center justify-center text-red-200">
-                      <span className="material-symbols-outlined text-[24px]">error</span>
+                  {/* Panel Header */}
+                  <div className="flex items-center justify-between border-b border-red-800/80 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-red-600/30 border border-red-400/40 flex items-center justify-center text-red-200">
+                        <span className="material-symbols-outlined text-[24px]">error</span>
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-bold text-white tracking-tight font-['Plus_Jakarta_Sans',sans-serif]">
+                          Central Error Tracking Panel
+                        </h2>
+                        <p className="text-xs text-red-200/80">
+                          Live diagnostic stream · Maximum 10 recent telemetry events
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="text-lg font-bold text-white tracking-tight font-['Plus_Jakarta_Sans',sans-serif]">
-                        Central Error Tracking Panel
-                      </h2>
-                      <p className="text-xs text-red-200/80">
-                        Live diagnostic stream · Maximum 10 recent telemetry events
-                      </p>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-1 rounded-full bg-red-900/80 border border-red-700 text-xs font-mono font-semibold text-red-200">
-                      {errors.length} / 10 Entries
-                    </span>
-                    {errors.length > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-1 rounded-full bg-red-900/80 border border-red-700 text-xs font-mono font-semibold text-red-200">
+                        {errors.length} / 10 Entries
+                      </span>
                       <button
                         onClick={async () => {
                           await fetch('http://localhost:5000/api/errors', {
@@ -828,20 +828,10 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
                       >
                         Clear Panel
                       </button>
-                    )}
+                    </div>
                   </div>
-                </div>
 
-                {/* Error List or Empty State */}
-                {errors.length === 0 ? (
-                  <div className="py-10 text-center flex flex-col items-center justify-center text-red-200/70">
-                    <span className="material-symbols-outlined text-4xl mb-2 text-red-300/40">verified</span>
-                    <p className="text-sm font-semibold text-white">No Errors Detected</p>
-                    <p className="text-xs text-red-300/70 mt-0.5">
-                      All application components, NFC telemetry, and client authentication pipelines are nominal.
-                    </p>
-                  </div>
-                ) : (
+                  {/* Error List */}
                   <div className="divide-y divide-red-800/60 text-xs">
                     {errors.slice(0, 10).map((err) => (
                       <div
@@ -880,8 +870,8 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 
