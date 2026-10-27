@@ -1,0 +1,12 @@
+{
+  "name": "nfc-speed-project",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Speed NFC - Bespoke Contactless Digital Distinction (Frontend + Express Backend)",
+  "scripts": {
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "start:backend": "npm start --prefix backend",
+    "build:frontend": "npm run build --prefix frontend"
+  }
+}
