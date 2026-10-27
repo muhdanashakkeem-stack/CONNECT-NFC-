@@ -39,11 +39,11 @@ app.use(express.json());
 const USERS_DATABASE = [
   {
     id: 'usr_admin_01',
-    email: 'admin@connectnfc.com',
-    name: 'Noram Micro (Super Admin 1)',
+    email: 'noramicro042@gmail.com',
+    name: 'Noram Micro (Super Admin)',
     role: 'admin',
     company: 'CONNECT NFC Headquarters',
-    title: 'Executive Platform Director',
+    title: 'Platform Director & Lead Admin',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
     permissions: [
       'all',
@@ -53,23 +53,6 @@ const USERS_DATABASE = [
       'manage_orders',
       'view_analytics',
       'edit_system_settings',
-    ],
-    status: 'active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'usr_admin_02',
-    email: 'noramicro042@gmail.com',
-    name: 'Security Admin 2',
-    role: 'admin',
-    company: 'CONNECT NFC Concierge Operations',
-    title: 'Operations & Client Onboarding Admin',
-    avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=200&q=80',
-    permissions: [
-      'manage_clients',
-      'manage_cards',
-      'manage_orders',
-      'view_analytics',
     ],
     status: 'active',
     createdAt: new Date().toISOString(),
