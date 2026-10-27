@@ -12,6 +12,12 @@ interface NavItem {
 }
 
 const NAV_ITEMS_BY_ROLE: Record<UserRole, NavItem[]> = {
+  superadmin: [
+    { href: '/admin', label: 'Command Overview', icon: 'dashboard' },
+    { href: '/admin/users', label: 'Enterprise MDM Users', icon: 'group' },
+    { href: '/admin/orders', label: 'Commission Pipeline', icon: 'inventory_2' },
+    { href: '/admin/fleet', label: 'NFC Fleet Dispatch', icon: 'contactless' },
+  ],
   admin: [
     { href: '/admin', label: 'Command Overview', icon: 'dashboard' },
     { href: '/admin/users', label: 'Enterprise MDM Users', icon: 'group' },
@@ -39,7 +45,7 @@ export const DashboardSidebar: React.FC<{ role: UserRole }> = ({ role }) => {
     <aside className="w-64 border-r border-outline-variant/30 bg-surface-container-lowest/50 min-h-[calc(100vh-80px)] p-4 flex flex-col justify-between hidden md:flex">
       <div className="flex flex-col gap-1">
         <div className="px-3 py-2 text-[10px] uppercase font-label-md tracking-[0.2em] text-outline">
-          {role === 'admin' ? 'Super Admin Fleet' : role === 'client' ? 'Client Workspace' : 'Customer Lounge'}
+          {role === 'admin' || role === 'superadmin' ? 'Super Admin Fleet' : role === 'client' ? 'Client Workspace' : 'Customer Lounge'}
         </div>
         {items.map((item) => {
           const isActive = pathname === item.href;

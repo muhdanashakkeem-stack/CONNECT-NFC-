@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth/context';
 import { BackendStatusPill } from './BackendStatusPill';
 
 export const DashboardNavbar: React.FC = () => {
-  const { user, role, logout, switchRolePreview } = useAuth();
+  const { user, role, logout } = useAuth();
 
   return (
     <header className="h-20 w-full border-b border-outline-variant/30 bg-surface/90 backdrop-blur-xl sticky top-0 z-40 px-4 md:px-8 flex items-center justify-between">
@@ -26,24 +26,6 @@ export const DashboardNavbar: React.FC = () => {
             </span>
           </div>
         </Link>
-
-        {/* Quick Role Switcher Pill for development / testing preview */}
-        <div className="hidden lg:flex items-center gap-1.5 p-1 rounded bg-surface-container-high text-xs">
-          <span className="text-[10px] text-outline px-1.5 uppercase font-label-sm">Role:</span>
-          {(['admin', 'client', 'customer'] as const).map((r) => (
-            <button
-              key={r}
-              onClick={() => switchRolePreview(r)}
-              className={`px-2.5 py-1 rounded text-[10px] font-label-sm uppercase tracking-wider transition-all ${
-                role === r
-                  ? 'bg-secondary-container text-white font-bold'
-                  : 'text-on-surface-variant hover:text-white hover:bg-surface-bright'
-              }`}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="flex items-center gap-3 md:gap-5">
@@ -75,7 +57,7 @@ export const DashboardNavbar: React.FC = () => {
             <button
               onClick={() => logout()}
               title="Sign Out"
-              className="p-2 rounded hover:bg-surface-container-high text-outline hover:text-white transition-colors"
+              className="p-2 rounded hover:bg-surface-container-high text-outline hover:text-white transition-colors cursor-pointer"
             >
               <span className="material-symbols-outlined text-lg">logout</span>
             </button>

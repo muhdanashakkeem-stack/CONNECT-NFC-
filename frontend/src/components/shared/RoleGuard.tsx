@@ -17,7 +17,7 @@ export const RoleGuard: React.FC<RoleGuardProps> = ({ children, allowedRoles }) 
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.push('/');
+      router.replace('/');
     }
   }, [isLoading, isAuthenticated, router]);
 

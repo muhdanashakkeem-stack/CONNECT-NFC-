@@ -31,10 +31,20 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Standby accounts for local testing if the backend is not yet started on port 5000
 const PREVIEW_USERS: Record<UserRole, User> = {
+  superadmin: {
+    id: 'usr_superadmin_01',
+    email: 'muhdanashakkeem@gmail.com',
+    name: 'Anas (Super Admin)',
+    role: 'superadmin',
+    company: 'CONNECT NFC Headquarters',
+    title: 'Super Platform Director & Founder',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+    createdAt: new Date().toISOString(),
+  },
   admin: {
     id: 'usr_admin_01',
-    email: 'admin@speednfc.com',
-    name: 'Noram Micro (Super Admin)',
+    email: 'noramicro042@gmail.com',
+    name: 'Noram Micro (Platform Admin)',
     role: 'admin',
     company: 'CONNECT NFC Headquarters',
     title: 'Platform Administrator',

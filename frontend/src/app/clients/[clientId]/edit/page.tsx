@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
+import { RoleGuard } from '@/components/shared/RoleGuard';
 
 interface ClientProfile {
   id: string;
@@ -70,8 +71,9 @@ export default function ClientWorkspacePage({ params }: { params: { clientId: st
   }
 
   return (
-    <div className="min-h-screen bg-[#fcf8fb] text-[#1c1b1d] font-sans antialiased p-6 sm:p-10 flex flex-col gap-8">
-      {/* Top Breadcrumb & Navigation */}
+    <RoleGuard allowedRoles={['admin', 'superadmin']}>
+      <div className="min-h-screen bg-[#fcf8fb] text-[#1c1b1d] font-sans antialiased p-6 sm:p-10 flex flex-col gap-8">
+        {/* Top Breadcrumb & Navigation */}
       <div className="flex items-center justify-between border-b border-black/[0.06] pb-4">
         <div className="flex items-center gap-3">
           <button
@@ -223,6 +225,7 @@ export default function ClientWorkspacePage({ params }: { params: { clientId: st
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </RoleGuard>
   );
 }
