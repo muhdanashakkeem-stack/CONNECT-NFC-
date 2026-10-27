@@ -476,39 +476,69 @@ app.post('/api/auth/otp/send', async (req, res) => {
     userRole: user.role,
   });
 
-  // Dispatch real email OTP via Resend SDK
-  try {
-    const fromAddress = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
-    const { data: resendData, error: resendError } = await resend.emails.send({
-      from: fromAddress,
-      to: normalizedEmail,
-      subject: `Your CONNECT NFC Verification Code: ${generatedOtp}`,
-      html: `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 28px; border: 1px solid #eaeaea; border-radius: 12px; background: #ffffff;">
-          <h2 style="color: #111; margin-top: 0; font-size: 20px;">CONNECT NFC Verification</h2>
-          <p style="color: #444; font-size: 14px; line-height: 1.5;">Here is your 6-digit verification code to sign in to your CONNECT NFC account:</p>
-          <div style="background: #f4f4f5; padding: 18px; text-align: center; border-radius: 8px; margin: 24px 0;">
-            <span style="font-family: monospace; font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #000000;">${generatedOtp}</span>
+  // Dispatch real email OTP: Primary = Resend, Fallback = Supabase Auth Email
+  let dispatched = false;
+  let dispatchMethod = '';
+
+  const isResendConfigured = process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes('your_resend_api_key_here');
+
+  if (isResendConfigured) {
+    try {
+      const fromAddress = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+      const { data: resendData, error: resendError } = await resend.emails.send({
+        from: fromAddress,
+        to: normalizedEmail,
+        subject: `Your CONNECT NFC Verification Code: ${generatedOtp}`,
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 28px; border: 1px solid #eaeaea; border-radius: 12px; background: #ffffff;">
+            <h2 style="color: #111; margin-top: 0; font-size: 20px;">CONNECT NFC Verification</h2>
+            <p style="color: #444; font-size: 14px; line-height: 1.5;">Here is your 6-digit verification code to sign in to your CONNECT NFC account:</p>
+            <div style="background: #f4f4f5; padding: 18px; text-align: center; border-radius: 8px; margin: 24px 0;">
+              <span style="font-family: monospace; font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #000000;">${generatedOtp}</span>
+            </div>
+            <p style="color: #666; font-size: 12px; margin-bottom: 0;">This code is valid for 10 minutes. If you did not request this code, you can safely ignore this email.</p>
           </div>
-          <p style="color: #666; font-size: 12px; margin-bottom: 0;">This code is valid for 10 minutes. If you did not request this code, you can safely ignore this email.</p>
-        </div>
-      `,
-    });
-
-    if (resendError) {
-      logAppError(`Resend dispatch error for ${normalizedEmail}: ${resendError.message}`, 'error', 'EmailEngine', '/api/auth/otp/send');
-      return res.status(500).json({
-        success: false,
-        error: `Failed to deliver verification code via email: ${resendError.message}`,
+        `,
       });
-    }
 
-    console.log(`[Resend Engine] Verification code email sent to: ${normalizedEmail} (ID: ${resendData?.id})`);
-  } catch (emailErr) {
-    logAppError(`Resend send exception for ${normalizedEmail}: ${emailErr.message}`, 'error', 'EmailEngine', '/api/auth/otp/send');
+      if (!resendError) {
+        dispatched = true;
+        dispatchMethod = 'Resend';
+        console.log(`[Resend Engine] Verification code email sent to: ${normalizedEmail} (ID: ${resendData?.id})`);
+      } else {
+        console.warn(`[Resend Engine] Notice for ${normalizedEmail}: ${resendError.message}. Falling back to Supabase email delivery...`);
+      }
+    } catch (emailErr) {
+      console.warn(`[Resend Engine] Exception for ${normalizedEmail}: ${emailErr.message}. Falling back to Supabase email delivery...`);
+    }
+  }
+
+  // Fallback to Supabase Auth OTP delivery if Resend was not configured or failed
+  if (!dispatched && supabase) {
+    try {
+      const { error: sbOtpError } = await supabase.auth.signInWithOtp({
+        email: normalizedEmail,
+        options: {
+          shouldCreateUser: false,
+        },
+      });
+      if (!sbOtpError) {
+        dispatched = true;
+        dispatchMethod = 'Supabase';
+        console.log(`[Supabase OTP] Real OTP email dispatched successfully by Supabase to: ${normalizedEmail}`);
+      } else {
+        console.warn(`[Supabase OTP] signInWithOtp notice: ${sbOtpError.message}`);
+      }
+    } catch (sbErr) {
+      console.warn(`[Supabase OTP] Exception: ${sbErr.message}`);
+    }
+  }
+
+  if (!dispatched) {
+    logAppError(`Failed to dispatch email via Resend and Supabase for ${normalizedEmail}`, 'error', 'EmailEngine', '/api/auth/otp/send');
     return res.status(500).json({
       success: false,
-      error: `Failed to send verification email: ${emailErr.message}`,
+      error: 'Unable to deliver verification email. Please check your email configuration in backend/.env.',
     });
   }
 
