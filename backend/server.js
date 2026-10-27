@@ -245,7 +245,59 @@ function logAppError(message, severity = 'error', component = 'System', route = 
 async function findProvisionedUser(email) {
   const normalized = email.trim().toLowerCase();
 
-  // 1. Check in-memory store
+  // 1. Check Supabase profiles table
+  if (supabase) {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .ilike('email', normalized)
+        .maybeSingle();
+
+      if (profile) {
+        const rawRole = (profile.role || 'client').toLowerCase();
+        const isAdminRole = rawRole === 'superadmin' || rawRole === 'admin';
+        const userObj = {
+          id: profile.id,
+          email: profile.email.toLowerCase(),
+          name: profile.name || profile.email.split('@')[0],
+          role: isAdminRole ? 'admin' : rawRole,
+          isSuperAdmin: rawRole === 'superadmin',
+          company: profile.company || (isAdminRole ? 'CONNECT NFC Headquarters' : 'Enterprise Client'),
+          title: profile.title || (isAdminRole ? 'Super Administrator' : 'Executive Cardholder'),
+          phone: profile.phone || '',
+          avatarUrl: profile.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+          permissions: isAdminRole
+            ? [
+                'all',
+                'manage_admins',
+                'manage_clients',
+                'manage_cards',
+                'manage_orders',
+                'view_analytics',
+                'edit_system_settings',
+              ]
+            : ['manage_own_card', 'view_own_analytics', 'export_vcard', 'edit_profile'],
+          status: isAdminRole ? 'active' : (profile.status || 'active'),
+          createdAt: profile.created_at || new Date().toISOString(),
+          source: 'supabase_profiles',
+        };
+
+        // Cache in memory
+        const memIdx = USERS_DATABASE.findIndex((u) => u.email.toLowerCase() === normalized);
+        if (memIdx !== -1) {
+          USERS_DATABASE[memIdx] = userObj;
+        } else {
+          USERS_DATABASE.push(userObj);
+        }
+        return userObj;
+      }
+    } catch (e) {
+      // Profiles table might not exist yet; fallback seamlessly
+    }
+  }
+
+  // 2. Check in-memory store
   let user = USERS_DATABASE.find((u) => u.email.toLowerCase() === normalized);
   if (user) {
     if (user.role === 'admin' || user.role === 'superadmin' || user.isSuperAdmin) {
@@ -254,7 +306,7 @@ async function findProvisionedUser(email) {
     return user;
   }
 
-  // 2. Check Supabase Auth
+  // 3. Check Supabase Auth (auth.users)
   if (supabase) {
     try {
       const { data: userList, error: listError } = await supabase.auth.admin.listUsers();
@@ -526,10 +578,21 @@ app.post('/api/auth/otp/send', async (req, res) => {
   }
 
   if (!dispatched) {
+    // Graceful fallback for local development if Resend testing sandbox restricts other recipient emails
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[Development Mailer] OTP for ${normalizedEmail} -> [${generatedOtp}] (Resend sandbox only sends to owner; printed here for testing)`);
+      return res.json({
+        success: true,
+        message: `Verification code generated for ${normalizedEmail}. Check terminal console for local testing code.`,
+        devOtp: generatedOtp,
+        resendCooldown: 60,
+      });
+    }
+
     logAppError(`Failed to dispatch email via Resend and Supabase for ${normalizedEmail}`, 'error', 'EmailEngine', '/api/auth/otp/send');
     return res.status(500).json({
       success: false,
-      error: 'Unable to deliver verification email. Please check your email configuration in backend/.env.',
+      error: 'Unable to deliver verification code. Please check that your email address is correct and try again.',
     });
   }
 
@@ -711,7 +774,37 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
    ========================================================================= */
 
 // 6. List all clients and users (Admin only)
-app.get('/api/admin/clients', requireAuth, requireRole(['admin']), (req, res) => {
+app.get('/api/admin/clients', requireAuth, requireRole(['admin']), async (req, res) => {
+  // Sync from Supabase profiles if table exists
+  if (supabase) {
+    try {
+      const { data: profiles } = await supabase.from('profiles').select('*');
+      if (profiles && Array.isArray(profiles)) {
+        profiles.forEach((p) => {
+          const norm = p.email.toLowerCase();
+          const existing = USERS_DATABASE.find((u) => u.email.toLowerCase() === norm);
+          if (!existing) {
+            const rawRole = (p.role || 'client').toLowerCase();
+            const isAdmin = rawRole === 'admin' || rawRole === 'superadmin';
+            USERS_DATABASE.push({
+              id: p.id || `usr_${Date.now()}`,
+              email: norm,
+              name: p.name || norm.split('@')[0],
+              role: isAdmin ? 'admin' : rawRole,
+              company: p.company || (isAdmin ? 'CONNECT NFC Headquarters' : 'Enterprise Client'),
+              title: p.title || (isAdmin ? 'Platform Director' : 'Executive Cardholder'),
+              phone: p.phone || '',
+              status: p.status || 'active',
+              createdAt: p.created_at || new Date().toISOString(),
+            });
+          }
+        });
+      }
+    } catch (e) {
+      // Table may not exist yet
+    }
+  }
+
   res.json({
     success: true,
     data: USERS_DATABASE,
@@ -750,7 +843,7 @@ app.post('/api/admin/clients', requireAuth, requireRole(['admin']), async (req, 
 
   let supabaseId = null;
 
-  // Provision in Supabase Auth
+  // 1. Provision in Supabase Auth (auth.users)
   if (supabase) {
     try {
       const { data: sbUser, error: sbError } = await supabase.auth.admin.createUser({
@@ -775,6 +868,25 @@ app.post('/api/admin/clients', requireAuth, requireRole(['admin']), async (req, 
       }
     } catch (e) {
       console.warn('[Backend Supabase] Creation exception:', e.message);
+    }
+  }
+
+  // 2. Also record in Supabase public.profiles table
+  if (supabase) {
+    try {
+      await supabase.from('profiles').upsert({
+        email: normalizedEmail,
+        name,
+        role: assignedRole,
+        company: company || 'Enterprise Client',
+        title: title || 'Executive Cardholder',
+        phone: phone || '',
+        status: 'active',
+        updated_at: new Date().toISOString(),
+      });
+      console.log(`[Supabase Profiles] Recorded ${normalizedEmail} in profiles table.`);
+    } catch (e) {
+      console.warn('[Supabase Profiles] Upsert notice:', e.message);
     }
   }
 
