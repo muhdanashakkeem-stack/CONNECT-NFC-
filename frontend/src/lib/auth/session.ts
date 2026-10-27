@@ -50,9 +50,10 @@ export function clearStoredSession(): void {
   }
 }
 
-export function getRedirectPathForRole(role: UserRole): string {
+export function getRedirectPathForRole(role: UserRole | string): string {
   switch (role) {
     case 'admin':
+    case 'superadmin':
       return '/admin';
     case 'client':
       return '/client';

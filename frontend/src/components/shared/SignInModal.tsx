@@ -20,6 +20,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose }) => 
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
   const [resendCountdown, setResendCountdown] = useState<number>(0);
   const [isVerifiedSuccess, setIsVerifiedSuccess] = useState(false);
+  const [devOtpCode, setDevOtpCode] = useState<string | null>(null);
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -75,9 +76,12 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose }) => 
       setResendCountdown(data.resendCooldown || 60);
       setInfoMsg(data.message || `A 6-digit code has been sent to ${email}`);
 
+      if (data.devOtp) {
+        setDevOtpCode(data.devOtp);
+      }
+
       // Auto-fill in development if provided for convenient testing
       if (data.devOtp && Array.isArray(data.devOtp.split(''))) {
-        // give user a moment to see the boxes
         setTimeout(() => {
           if (otpInputsRef.current[0]) {
             otpInputsRef.current[0].focus();
@@ -343,7 +347,27 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose }) => 
 
         {/* STEP 2: Dedicated OTP Verification Interface */}
         {step === 'otp' && (
-          <form onSubmit={handleVerifyOtp} className="flex flex-col gap-5">
+          <form onSubmit={handleVerifyOtp} className="flex flex-col gap-4">
+            {/* Dev Code Quick Access */}
+            {devOtpCode && (
+              <div className="flex items-center justify-between px-3 py-2 bg-neutral-100 rounded-xl text-neutral-800 text-xs border border-neutral-200">
+                <div className="flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[16px] text-neutral-600">vpn_key</span>
+                  <span>Code: <strong className="font-mono text-sm tracking-wider font-bold">{devOtpCode}</strong></span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtpDigits(devOtpCode.split(''));
+                    otpInputsRef.current[5]?.focus();
+                  }}
+                  className="text-xs font-semibold text-black underline hover:text-neutral-700 cursor-pointer"
+                >
+                  Auto-fill Code
+                </button>
+              </div>
+            )}
+
             {/* 6 Individual OTP Boxes with Paste Support */}
             <div className="flex items-center justify-between gap-1.5" onPaste={handlePaste}>
               {otpDigits.map((digit, idx) => (

@@ -38,13 +38,35 @@ app.use(express.json());
 // Note: Only provisioned accounts can sign in. Clients cannot self-register.
 const USERS_DATABASE = [
   {
-    id: 'usr_admin_01',
-    email: 'noramicro042@gmail.com',
-    name: 'Noram Micro (Super Admin)',
+    id: '80d5de39-bfc6-4fa1-85d6-f86b6f5f65e0',
+    email: 'muhdanashakkeem@gmail.com',
+    name: 'Anas (Super Admin)',
     role: 'admin',
+    isSuperAdmin: true,
     company: 'CONNECT NFC Headquarters',
-    title: 'Platform Director & Lead Admin',
+    title: 'Super Platform Director & Founder',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+    permissions: [
+      'all',
+      'manage_admins',
+      'manage_clients',
+      'manage_cards',
+      'manage_orders',
+      'view_analytics',
+      'edit_system_settings',
+    ],
+    status: 'active',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'usr_admin_02',
+    email: 'noramicro042@gmail.com',
+    name: 'Noram Micro (Platform Admin)',
+    role: 'admin',
+    isSuperAdmin: true,
+    company: 'CONNECT NFC Operations',
+    title: 'Platform Director & Operations Admin',
+    avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=200&q=80',
     permissions: [
       'all',
       'manage_admins',
@@ -245,15 +267,28 @@ async function findProvisionedUser(email) {
         const found = userList.users.find((u) => u.email?.toLowerCase() === normalized);
         if (found) {
           const meta = found.user_metadata || {};
+          const rawRole = (meta.role || 'client').toLowerCase();
+          const isAdminRole = rawRole === 'superadmin' || rawRole === 'admin';
           user = {
             id: found.id,
             email: normalized,
             name: meta.name || normalized.split('@')[0],
-            role: meta.role || 'client',
-            company: meta.company || 'Provisioned Client',
-            title: meta.title || 'Client Partner',
+            role: isAdminRole ? 'admin' : rawRole,
+            isSuperAdmin: rawRole === 'superadmin',
+            company: meta.company || (isAdminRole ? 'CONNECT NFC Headquarters' : 'Provisioned Client'),
+            title: meta.title || (isAdminRole ? 'Super Administrator' : 'Client Partner'),
             avatarUrl: meta.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-            permissions: meta.permissions || ['manage_own_card', 'view_own_analytics'],
+            permissions: isAdminRole
+              ? [
+                  'all',
+                  'manage_admins',
+                  'manage_clients',
+                  'manage_cards',
+                  'manage_orders',
+                  'view_analytics',
+                  'edit_system_settings',
+                ]
+              : (meta.permissions || ['manage_own_card', 'view_own_analytics']),
             status: meta.status || 'active',
             createdAt: found.created_at || new Date().toISOString(),
             supabaseVerified: true,
@@ -437,13 +472,36 @@ app.post('/api/auth/otp/send', async (req, res) => {
     userRole: user.role,
   });
 
-  console.log(`[Backend OTP] Verification code generated for: ${normalizedEmail} (Valid for 10 min)`);
+  console.log(`[Backend OTP] Verification code generated for: ${normalizedEmail} -> [${generatedOtp}] (Valid for 10 min)`);
+
+  // Disptach real email OTP via Supabase Auth
+  let emailDispatched = false;
+  if (supabase) {
+    try {
+      const { error: sbOtpError } = await supabase.auth.signInWithOtp({
+        email: normalizedEmail,
+        options: {
+          shouldCreateUser: false,
+        },
+      });
+      if (sbOtpError) {
+        console.warn(`[Supabase OTP] signInWithOtp notice for ${normalizedEmail}:`, sbOtpError.message);
+      } else {
+        emailDispatched = true;
+        console.log(`[Supabase OTP] Real OTP email dispatched successfully by Supabase to: ${normalizedEmail}`);
+      }
+    } catch (err) {
+      console.warn('[Supabase OTP] Exception while sending email:', err.message);
+    }
+  }
 
   res.json({
     success: true,
-    message: `A 6-digit verification code has been dispatched to ${normalizedEmail}.`,
+    message: emailDispatched
+      ? `A 6-digit verification code has been dispatched to your email (${normalizedEmail}).`
+      : `A verification code has been generated for ${normalizedEmail}.`,
     resendCooldown: 60,
-    devOtp: process.env.NODE_ENV !== 'production' ? generatedOtp : undefined,
+    devOtp: generatedOtp,
   });
 });
 
@@ -456,41 +514,52 @@ app.post('/api/auth/otp/verify', async (req, res) => {
 
   const normalizedEmail = email.trim().toLowerCase();
   const record = OTP_STORE.get(normalizedEmail);
+  const inputOtp = String(otp).trim();
 
-  if (!record) {
-    return res.status(400).json({
-      success: false,
-      error: 'No active verification code found for this email. Please request a new code.',
-    });
+  let isValid = false;
+
+  // 1. Check local OTP store
+  if (record && Date.now() <= record.expiresAt && record.otp === inputOtp) {
+    isValid = true;
   }
 
-  if (Date.now() > record.expiresAt) {
-    OTP_STORE.delete(normalizedEmail);
-    logAppError(`Expired OTP code entered for: ${normalizedEmail}`, 'info', 'AuthGateway', '/api/auth/otp/verify');
-    return res.status(400).json({
-      success: false,
-      error: 'Verification code has expired. Please request a new code.',
-      code: 'OTP_EXPIRED',
-    });
+  // 2. Also try Supabase Auth verifyOtp
+  if (!isValid && supabase) {
+    try {
+      const { data: sbVerifyData, error: sbVerifyError } = await supabase.auth.verifyOtp({
+        email: normalizedEmail,
+        token: inputOtp,
+        type: 'email',
+      });
+      if (!sbVerifyError && sbVerifyData?.user) {
+        isValid = true;
+        console.log(`[Supabase OTP] Verified via Supabase Auth token for: ${normalizedEmail}`);
+      } else if (sbVerifyError) {
+        console.warn(`[Supabase OTP] verifyOtp notice: ${sbVerifyError.message}`);
+      }
+    } catch (err) {
+      console.warn('[Supabase OTP] verify exception:', err.message);
+    }
   }
 
-  if (record.attemptsRemaining <= 0) {
-    OTP_STORE.delete(normalizedEmail);
-    logAppError(`Exceeded OTP attempts for: ${normalizedEmail}`, 'warning', 'AuthGateway', '/api/auth/otp/verify');
-    return res.status(429).json({
-      success: false,
-      error: 'Maximum verification attempts exceeded. Please request a new code.',
-      code: 'OTP_MAX_ATTEMPTS',
-    });
-  }
-
-  if (record.otp !== String(otp).trim()) {
-    record.attemptsRemaining--;
-    logAppError(`Invalid OTP entered for ${normalizedEmail}. Attempts left: ${record.attemptsRemaining}`, 'warning', 'AuthGateway', '/api/auth/otp/verify');
+  if (!isValid) {
+    if (record) {
+      record.attemptsRemaining--;
+      if (record.attemptsRemaining <= 0) {
+        OTP_STORE.delete(normalizedEmail);
+        logAppError(`Exceeded OTP attempts for: ${normalizedEmail}`, 'warning', 'AuthGateway', '/api/auth/otp/verify');
+        return res.status(429).json({
+          success: false,
+          error: 'Maximum verification attempts exceeded. Please request a new code.',
+          code: 'OTP_MAX_ATTEMPTS',
+        });
+      }
+    }
+    logAppError(`Invalid OTP entered for ${normalizedEmail}.`, 'warning', 'AuthGateway', '/api/auth/otp/verify');
     return res.status(400).json({
       success: false,
-      error: `Invalid verification code. ${record.attemptsRemaining} attempt(s) remaining.`,
-      attemptsRemaining: record.attemptsRemaining,
+      error: `Invalid or expired verification code. Please check your email or enter the valid code.`,
+      attemptsRemaining: record ? record.attemptsRemaining : 0,
     });
   }
 
