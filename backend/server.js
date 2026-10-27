@@ -44,7 +44,7 @@ const USERS_DATABASE = [
   {
     id: '80d5de39-bfc6-4fa1-85d6-f86b6f5f65e0',
     email: 'muhdanashakkeem@gmail.com',
-    name: 'Anas (Super Admin)',
+    name: 'Muhammed Anas (Super Admin)',
     role: 'admin',
     isSuperAdmin: true,
     company: 'CONNECT NFC Headquarters',
@@ -62,145 +62,13 @@ const USERS_DATABASE = [
     status: 'active',
     createdAt: new Date().toISOString(),
   },
-  {
-    id: 'usr_admin_02',
-    email: 'noramicro042@gmail.com',
-    name: 'Noram Micro (Platform Admin)',
-    role: 'admin',
-    isSuperAdmin: true,
-    company: 'CONNECT NFC Operations',
-    title: 'Platform Director & Operations Admin',
-    avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=200&q=80',
-    permissions: [
-      'all',
-      'manage_admins',
-      'manage_clients',
-      'manage_cards',
-      'manage_orders',
-      'view_analytics',
-      'edit_system_settings',
-    ],
-    status: 'active',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'usr_client_02',
-    email: 'adrian@vancepartners.com',
-    name: 'Adrian Vance',
-    role: 'client',
-    phone: '+44 20 7946 0912',
-    company: 'Vance & Partners Advisory',
-    title: 'Managing Partner & Founder',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
-    permissions: [
-      'manage_own_card',
-      'view_own_analytics',
-      'export_vcard',
-      'edit_profile',
-    ],
-    status: 'active',
-    welcomeEmailDraft: {
-      subject: 'Welcome to Our NFC Business Platform',
-      clientName: 'Adrian Vance',
-      recipient: 'adrian@vancepartners.com',
-      content: 'Hello Adrian Vance,\n\nWelcome to our NFC business platform!\n\nYour client account has been created successfully. You can access your account using your registered email address and the email verification process.\n\nOnce logged in, you will be able to manage your profile and proceed with your NFC card setup.\n\nWe look forward to helping you create your digital NFC identity.\n\nBest regards,\nThe NFC Team',
-      status: 'draft_prepared',
-      preparedAt: new Date().toISOString(),
-    },
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 'usr_cust_03',
-    email: 'elena.rostova@luxuryatelier.com',
-    name: 'Elena Rostova',
-    role: 'customer',
-    company: 'Rostova Fine Jewelry',
-    title: 'Creative Director',
-    avatarUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCmYmi8meknvotEJRF3uo6_R8ly-cCFoXJbW27rlfk3V53CbadpaROXiciIwCib9yh-9JHr4cejaBrj4A7YwR0evkb4SNHDFH6LCnEtuRDImWlaWlfiBDo4qnc0xYRyiadT7XNc-NL_w8kqXcet0iVFCKoFmlG6Pfe6P3snC3aUlQ0NMQnDLk-UfTbGz0Ua1f3jrVAPGcYT1o80PCh2YrHyXIEWvNMqCLn5jBb743Fuh519ZzUQ2Z_O',
-    permissions: [
-      'view_own_order',
-      'download_invoice',
-      'track_production',
-    ],
-    status: 'active',
-    createdAt: new Date().toISOString(),
-  },
 ];
 
-let INQUIRIES_DATABASE = [
-  {
-    id: 'inq_101',
-    fullName: 'David Sterling',
-    workEmail: 'd.sterling@rothschild.com',
-    phone: '+44 20 7946 0912',
-    tier: 'corporate-fleet',
-    notes: 'Require 45 brushed titanium cards engraved with corporate crest for London partners.',
-    status: 'new',
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-  },
-];
+let INQUIRIES_DATABASE = [];
 
-let CARDS_DATABASE = [
-  {
-    id: 'card_client_01',
-    userId: 'usr_client_02',
-    clientId: 'usr_client_02',
-    slug: 'adrian-vance',
-    profileSlug: 'adrian-vance',
-    profileUrl: `${CLIENT_URL}/profile/adrian-vance`,
-    cardIdentifier: '04:8F:2A:1B:6C:5E:80',
-    cardName: 'Executive Titanium Primary',
-    cardholderName: 'Adrian Vance',
-    clientName: 'Adrian Vance',
-    clientEmail: 'adrian@vancepartners.com',
-    headlineTitle: 'Managing Partner & Founder',
-    companyName: 'Vance & Partners Advisory',
-    bio: 'Private equity advisor & cross-border mergers. Dedicated to building durable generational enterprises.',
-    email: 'adrian@vancepartners.com',
-    phone: '+44 20 7946 0912',
-    location: 'Mayfair, London · Zurich',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
-    finish: 'obsidian',
-    nfcChipUid: '04:8F:2A:1B:6C:5E:80',
-    nfcFrequency: '13.56 MHz NTAG216',
-    registrationStatus: 'assigned',
-    programmingStatus: 'programmed',
-    totalTaps: 1482,
-    lastTappedAt: new Date().toISOString(),
-    isActive: true,
-    socialLinks: [
-      { id: '1', platform: 'linkedin', label: 'LinkedIn', url: 'https://linkedin.com/in/adrian-vance', isActive: true },
-      { id: '2', platform: 'whatsapp', label: 'WhatsApp Concierge', url: 'https://wa.me/442079460912', isActive: true },
-    ],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
+let CARDS_DATABASE = [];
 
-let ORDERS_DATABASE = [
-  {
-    id: 'ord_9901',
-    userId: 'usr_cust_03',
-    orderNumber: 'CNFC-2026-8812',
-    tier: 'connect-obsidian',
-    cardFinish: 'Matte Obsidian Carbon',
-    engravingText: 'ELENA ROSTOVA // CREATIVE DIRECTOR',
-    quantity: 1,
-    totalPrice: 4999,
-    currency: 'INR',
-    status: 'in_production',
-    trackingNumber: 'BLUEDART-88291039',
-    shippingAddress: {
-      line1: 'Bespoke Atelier, High Street',
-      city: 'Mumbai',
-      state: 'Maharashtra',
-      postalCode: '400001',
-      country: 'India',
-    },
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
+let ORDERS_DATABASE = [];
 
 // Error Logs Database (In-Memory with safe redaction)
 let ERROR_LOGS_DATABASE = [];
@@ -890,14 +758,58 @@ app.post('/api/admin/clients', requireAuth, requireRole(['admin']), async (req, 
     }
   }
 
-  const welcomeEmailDraft = {
-    subject: 'Welcome to Our NFC Business Platform',
-    recipient: normalizedEmail,
-    clientName: name,
-    content: `Hello ${name},\n\nWelcome to our NFC business platform!\n\nYour client account has been created successfully. You can access your account using your registered email address and the email verification process.\n\nOnce logged in, you will be able to manage your profile and proceed with your NFC card setup.\n\nWe look forward to helping you create your digital NFC identity.\n\nBest regards,\nThe NFC Team`,
-    status: 'draft_prepared',
-    preparedAt: new Date().toISOString(),
-  };
+  // 3. Dispatch real welcome email directly via Resend to client's inbox
+  let welcomeDispatched = false;
+  const isResendConfigured = process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.includes('your_resend_api_key_here');
+
+  if (isResendConfigured) {
+    try {
+      const fromAddress = process.env.RESEND_FROM_EMAIL || 'CONNECT NFC <onboarding@resend.dev>';
+      const { data: resendData, error: resendError } = await resend.emails.send({
+        from: fromAddress,
+        to: normalizedEmail,
+        subject: 'Welcome to Our NFC Business Platform',
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; border: 1px solid #eaeaea; border-radius: 14px; background: #ffffff;">
+            <div style="margin-bottom: 24px; border-bottom: 1px solid #f0f0f0; padding-bottom: 16px;">
+              <span style="font-size: 13px; font-weight: 800; letter-spacing: 0.12em; color: #000000; text-transform: uppercase;">CONNECT NFC</span>
+            </div>
+            <h2 style="font-size: 20px; font-weight: 700; color: #111111; margin: 0 0 16px 0;">Hello ${name},</h2>
+            <p style="font-size: 15px; font-weight: 600; color: #111111; margin: 0 0 12px 0;">
+              Welcome to our NFC business platform!
+            </p>
+            <p style="font-size: 14px; color: #444444; line-height: 1.6; margin: 0 0 16px 0;">
+              Your client account has been created successfully. You can access your account using your registered email address (<strong>${normalizedEmail}</strong>) and the email verification process.
+            </p>
+            <p style="font-size: 14px; color: #444444; line-height: 1.6; margin: 0 0 20px 0;">
+              Once logged in, you will be able to manage your profile and proceed with your NFC card setup.
+            </p>
+            <div style="margin: 28px 0;">
+              <a href="${CLIENT_URL}" style="display: inline-block; background: #000000; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-size: 14px; font-weight: 600;">Log In to Platform</a>
+            </div>
+            <p style="font-size: 14px; color: #444444; line-height: 1.6; margin: 0 0 24px 0;">
+              We look forward to helping you create your digital NFC identity.
+            </p>
+            <div style="border-top: 1px solid #f0f0f0; padding-top: 16px;">
+              <p style="font-size: 13px; color: #888888; line-height: 1.5; margin: 0;">
+                Best regards,<br>
+                <strong>The NFC Team</strong>
+              </p>
+            </div>
+          </div>
+        `,
+      });
+
+      if (!resendError) {
+        welcomeDispatched = true;
+        console.log(`[Resend Engine] Welcome email dispatched directly to client: ${normalizedEmail} (ID: ${resendData?.id})`);
+      } else {
+        console.warn(`[Resend Engine] Notice sending welcome email to ${normalizedEmail}: ${resendError.message}`);
+      }
+    } catch (e) {
+      console.warn(`[Resend Engine] Exception sending welcome email to ${normalizedEmail}: ${e.message}`);
+    }
+  }
 
   const newClient = {
     id: supabaseId || `usr_client_${Date.now()}`,
@@ -909,7 +821,7 @@ app.post('/api/admin/clients', requireAuth, requireRole(['admin']), async (req, 
     phone: phone || '',
     permissions: assignedPermissions,
     status: 'active',
-    welcomeEmailDraft,
+    welcomeEmailDispatched: welcomeDispatched,
     provisionedBy: req.user.email,
     createdAt: new Date().toISOString(),
     supabaseVerified: !!supabaseId,
@@ -924,8 +836,8 @@ app.post('/api/admin/clients', requireAuth, requireRole(['admin']), async (req, 
   res.status(201).json({
     success: true,
     data: newClient,
-    welcomeEmail: welcomeEmailDraft,
-    message: `Client ${name} (${normalizedEmail}) has been successfully provisioned. Welcome email draft prepared.`,
+    welcomeDispatched,
+    message: `Client ${name} (${normalizedEmail}) has been successfully provisioned. Welcome email sent directly to client's inbox.`,
   });
 });
 
@@ -1195,7 +1107,7 @@ app.post('/api/admin/cards', requireAuth, requireRole(['admin']), (req, res) => 
 
   const newCard = {
     id: `card_${Date.now()}`,
-    userId: req.body.userId || 'usr_client_02',
+    userId: req.body.userId || (USERS_DATABASE.find(u => u.email === (email || '').toLowerCase())?.id || req.user.id),
     slug,
     cardName: `${cardholderName} Transponder`,
     cardholderName,

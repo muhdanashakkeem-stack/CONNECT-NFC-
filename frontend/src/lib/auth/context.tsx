@@ -29,12 +29,12 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Standby accounts for local testing if the backend is not yet started on port 5000
+// Standby fallback definitions (configured strictly with verified owner)
 const PREVIEW_USERS: Record<UserRole, User> = {
   superadmin: {
-    id: 'usr_superadmin_01',
+    id: '80d5de39-bfc6-4fa1-85d6-f86b6f5f65e0',
     email: 'muhdanashakkeem@gmail.com',
-    name: 'Anas (Super Admin)',
+    name: 'Muhammed Anas (Super Admin)',
     role: 'superadmin',
     company: 'CONNECT NFC Headquarters',
     title: 'Super Platform Director & Founder',
@@ -42,33 +42,33 @@ const PREVIEW_USERS: Record<UserRole, User> = {
     createdAt: new Date().toISOString(),
   },
   admin: {
-    id: 'usr_admin_01',
-    email: 'noramicro042@gmail.com',
-    name: 'Noram Micro (Platform Admin)',
+    id: '80d5de39-bfc6-4fa1-85d6-f86b6f5f65e0',
+    email: 'muhdanashakkeem@gmail.com',
+    name: 'Muhammed Anas (Super Admin)',
     role: 'admin',
     company: 'CONNECT NFC Headquarters',
-    title: 'Platform Administrator',
+    title: 'Super Platform Director & Founder',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
     createdAt: new Date().toISOString(),
   },
   client: {
-    id: 'usr_client_02',
-    email: 'adrian@vancepartners.com',
-    name: 'Adrian Vance',
+    id: '80d5de39-bfc6-4fa1-85d6-f86b6f5f65e0',
+    email: 'muhdanashakkeem@gmail.com',
+    name: 'Muhammed Anas',
     role: 'client',
-    company: 'Vance & Partners Advisory',
-    title: 'Managing Partner & Founder',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
+    company: 'CONNECT NFC Client',
+    title: 'Verified Member',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
     createdAt: new Date().toISOString(),
   },
   customer: {
-    id: 'usr_cust_03',
-    email: 'elena.rostova@luxuryatelier.com',
-    name: 'Elena Rostova',
+    id: '80d5de39-bfc6-4fa1-85d6-f86b6f5f65e0',
+    email: 'muhdanashakkeem@gmail.com',
+    name: 'Muhammed Anas',
     role: 'customer',
-    company: 'Rostova Fine Jewelry',
-    title: 'Creative Director',
-    avatarUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCmYmi8meknvotEJRF3uo6_R8ly-cCFoXJbW27rlfk3V53CbadpaROXiciIwCib9yh-9JHr4cejaBrj4A7YwR0evkb4SNHDFH6LCnEtuRDImWlaWlfiBDo4qnc0xYRyiadT7XNc-NL_w8kqXcet0iVFCKoFmlG6Pfe6P3snC3aUlQ0NMQnDLk-UfTbGz0Ua1f3jrVAPGcYT1o80PCh2YrHyXIEWvNMqCLn5jBb743Fuh519ZzUQ2Z_O',
+    company: 'CONNECT NFC Customer',
+    title: 'Verified Cardholder',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
     createdAt: new Date().toISOString(),
   },
 };

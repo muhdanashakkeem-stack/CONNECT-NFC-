@@ -106,7 +106,6 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
   const [newClientCompany, setNewClientCompany] = useState('');
   const [newClientNotes, setNewClientNotes] = useState('');
   const [isSavingClient, setIsSavingClient] = useState(false);
-  const [welcomeDraftModal, setWelcomeDraftModal] = useState<ClientItem['welcomeEmailDraft'] | null>(null);
 
   // Client Delete Confirmation Modal
   const [clientToDelete, setClientToDelete] = useState<ClientItem | null>(null);
@@ -247,12 +246,7 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
         throw new Error(data.error || 'Failed to save client.');
       }
 
-      // Show welcome draft modal
-      if (data.welcomeEmail) {
-        setWelcomeDraftModal(data.welcomeEmail);
-      }
-
-      showToast('success', `Client ${newClientName} created. Welcome email draft prepared.`);
+      showToast('success', `Client ${newClientName} created. Welcome email dispatched to ${newClientEmail}.`);
       setIsAddClientModalOpen(false);
       setNewClientName('');
       setNewClientEmail('');
@@ -887,7 +881,7 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
                     Client Management
                   </h1>
                   <p className="text-sm text-[#5d5e66] mt-1">
-                    Manage client directory, account statuses, and review welcome onboarding email drafts.
+                    Manage client directory, account statuses, and provision authenticated access.
                   </p>
                 </div>
 
@@ -1471,11 +1465,11 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
                   required
                   value={newClientEmail}
                   onChange={(e) => setNewClientEmail(e.target.value)}
-                  placeholder="e.g. adrian@vancepartners.com"
+                  placeholder="e.g. client@example.com"
                   className="h-10 px-3.5 rounded-xl bg-[#fcf8fb] border border-black/[0.06] text-xs text-black placeholder:text-gray-400 focus:outline-none focus:border-black"
                 />
                 <span className="text-[10px] text-[#5d5e66]">
-                  A welcome onboarding email draft will be prepared immediately upon saving.
+                  A welcome email with login instructions will be sent directly to the client&apos;s inbox upon provisioning.
                 </span>
               </div>
 
@@ -1541,51 +1535,6 @@ export function ObsidianPrismAdmin({ onTogglePublicView }: ObsidianPrismAdminPro
         </div>
       )}
 
-      {/* =========================================================================
-          MODAL: WELCOME EMAIL DRAFT PREVIEW
-          ========================================================= */}
-      {welcomeDraftModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4 border border-black/[0.06]">
-            <div className="flex items-center justify-between pb-2 border-b border-black/[0.06]">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-black text-[20px]">mark_email_read</span>
-                <h3 className="text-base font-bold text-black font-['Plus_Jakarta_Sans',sans-serif]">
-                  Welcome Email Draft Prepared
-                </h3>
-              </div>
-              <button
-                onClick={() => setWelcomeDraftModal(null)}
-                className="p-1 rounded text-gray-400 hover:text-black"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-3 bg-[#fcf8fb] rounded-xl text-xs space-y-1 font-mono text-[#5d5e66] border border-black/[0.04]">
-              <div><strong>Subject:</strong> {welcomeDraftModal.subject}</div>
-              <div><strong>Recipient:</strong> {welcomeDraftModal.recipient}</div>
-              <div><strong>Status:</strong> {welcomeDraftModal.status.replace('_', ' ').toUpperCase()}</div>
-            </div>
-
-            <div className="p-4 bg-gray-50 rounded-xl text-xs text-gray-800 whitespace-pre-line font-sans border border-gray-200 leading-relaxed max-h-60 overflow-y-auto">
-              {welcomeDraftModal.content}
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
-              <span className="text-[10px] text-gray-400 italic">
-                Email draft saved in system outbox (actual delivery reported accurately).
-              </span>
-              <button
-                onClick={() => setWelcomeDraftModal(null)}
-                className="px-4 py-2 bg-black text-white rounded-xl text-xs font-semibold hover:bg-neutral-800 cursor-pointer"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* =========================================================================
           MODAL: CONFIRM CLIENT DELETE
