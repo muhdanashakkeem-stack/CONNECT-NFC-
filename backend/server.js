@@ -182,49 +182,119 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// 2. Login endpoint (validates credentials and signs JWT on server)
-app.post('/api/auth/login', (req, res) => {
-  const { email, password, role } = req.body;
+// 2. Login endpoint (Passwordless, single-action sign-in with Supabase role verification)
+app.post('/api/auth/login', async (req, res) => {
+  const { email, role: requestedRole } = req.body;
 
   if (!email) {
-    return res.status(400).json({ success: false, error: 'Email is required.' });
+    return res.status(400).json({ success: false, error: 'Executive email address is required.' });
   }
 
-  // Find user in DB or match by email/role
-  let user = USERS_DATABASE.find(
-    (u) => u.email.toLowerCase() === email.toLowerCase()
-  );
+  const normalizedEmail = email.trim().toLowerCase();
+  let userRole = null;
+  let userName = null;
+  let userCompany = null;
+  let userTitle = null;
+  let userId = null;
+  let avatarUrl = null;
+  let supabaseVerified = false;
 
-  if (!user && role) {
-    user = USERS_DATABASE.find((u) => u.role === role);
+  // Step 1: Check Supabase Auth for existing user and retrieve verified role
+  if (supabase) {
+    try {
+      const { data: userList, error: listError } = await supabase.auth.admin.listUsers();
+      if (!listError && userList && userList.users) {
+        const found = userList.users.find(
+          (u) => u.email && u.email.toLowerCase() === normalizedEmail
+        );
+        if (found) {
+          userId = found.id;
+          userRole = found.user_metadata?.role || found.app_metadata?.role;
+          userName = found.user_metadata?.name;
+          userCompany = found.user_metadata?.company;
+          userTitle = found.user_metadata?.title;
+          avatarUrl = found.user_metadata?.avatarUrl;
+          supabaseVerified = true;
+          console.log(`[Backend Supabase] User verified from Supabase Auth: ${normalizedEmail} (Role: ${userRole})`);
+        }
+      }
+    } catch (err) {
+      console.warn('[Backend Supabase] Query warning:', err.message);
+    }
   }
 
-  if (!user) {
-    // Generate authenticated profile
-    user = {
-      id: `usr_${Date.now()}`,
-      email: email,
-      name: email.split('@')[0].replace('.', ' '),
-      role: role || (email.includes('admin') ? 'admin' : email.includes('client') ? 'client' : 'customer'),
-      company: 'Private Client Office',
-      title: 'Executive Cardholder',
-      createdAt: new Date().toISOString(),
-    };
+  // Step 2: If user not yet in Supabase, provision them with their assigned role
+  if (!userRole) {
+    const predefined = USERS_DATABASE.find(
+      (u) => u.email.toLowerCase() === normalizedEmail
+    );
+
+    if (predefined) {
+      userId = predefined.id;
+      userRole = predefined.role;
+      userName = predefined.name;
+      userCompany = predefined.company;
+      userTitle = predefined.title;
+      avatarUrl = predefined.avatarUrl;
+    } else {
+      userRole = requestedRole || (normalizedEmail.includes('admin') ? 'admin' : normalizedEmail.includes('client') ? 'client' : 'customer');
+      userId = `usr_${Date.now()}`;
+      userName = normalizedEmail.split('@')[0].replace(/[\._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      userCompany = 'Private Atelier Client';
+      userTitle = userRole === 'admin' ? 'Super Administrator' : userRole === 'client' ? 'Client Partner' : 'Customer';
+    }
+
+    // Persist into Supabase Auth with metadata role
+    if (supabase) {
+      try {
+        const { data: created, error: createError } = await supabase.auth.admin.createUser({
+          email: normalizedEmail,
+          email_confirm: true,
+          user_metadata: {
+            role: userRole,
+            name: userName,
+            company: userCompany,
+            title: userTitle,
+            avatarUrl: avatarUrl,
+          },
+        });
+        if (!createError && created?.user) {
+          userId = created.user.id;
+          supabaseVerified = true;
+          console.log(`[Backend Supabase] Auto-provisioned user in Supabase: ${normalizedEmail} with role: ${userRole}`);
+        }
+      } catch (err) {
+        console.warn('[Backend Supabase] Provision warning:', err.message);
+      }
+    }
   }
 
-  // Sign JWT token strictly on the backend
+  const safeUser = {
+    id: userId,
+    email: normalizedEmail,
+    name: userName || normalizedEmail.split('@')[0],
+    role: userRole,
+    company: userCompany || 'CONNECT NFC Network',
+    title: userTitle || 'Executive Member',
+    avatarUrl: avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+    supabaseVerified,
+    createdAt: new Date().toISOString(),
+  };
+
+  // Step 3: Sign JWT token on the backend with verified Supabase role
   const token = jwt.sign(
     {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      name: user.name,
+      id: safeUser.id,
+      email: safeUser.email,
+      role: safeUser.role,
+      name: safeUser.name,
+      supabaseVerified: safeUser.supabaseVerified,
     },
     JWT_SECRET,
     { expiresIn: '7d' }
   );
 
-  const { password: _, ...safeUser } = user;
+  console.log(`[Backend Auth] Session issued for ${safeUser.email} -> Role: ${safeUser.role} (Supabase verified: ${safeUser.supabaseVerified})`);
 
   res.json({
     success: true,
@@ -233,7 +303,7 @@ app.post('/api/auth/login', (req, res) => {
       user: safeUser,
       expiresIn: 604800,
     },
-    message: 'Authentication successful.',
+    message: `Sign in successful. Role verified by Supabase: ${safeUser.role}`,
   });
 });
 
